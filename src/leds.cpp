@@ -18,18 +18,15 @@ static unsigned long strobeTimer = 0;
 // ── Setup ───────────────────────────────────────────────────────────────────
 void ledsSetup() {
     gStripCtrl = &FastLED.addLeds<WS2812B, STRIP_PIN, GRB>(stripLeds, STRIP_NUM_LEDS);
-    gStripCtrl->setBrightness(STRIP_BRIGHTNESS);
     fill_solid(stripLeds, STRIP_NUM_LEDS, CRGB::Black);
-    FastLED.show();
+    gStripCtrl->showLeds(STRIP_BRIGHTNESS);
     Serial.println(F("[LEDS] Setup complete"));
 }
 
 // ── Internal Helper: Breathing Brightness Effect ─────────────────────────────
 // Applies a sinusoidal brightness pulse to a solid-colour strip.
-// Uses per-controller brightness to avoid touching the global FastLED brightness
-// (which would affect the matrix controller too). The nominal STRIP_BRIGHTNESS
-// is restored immediately after FastLED.show() so any caller that checks the
-// controller brightness afterwards sees a consistent value.
+// Calls showLeds(brightness) directly on the strip controller so only the
+// strip is updated with the variable brightness, leaving the matrix unaffected.
 // @param color  Solid colour to fill the strip with
 // @param bpm    Oscillation speed (beats per minute)
 // @param lo     Minimum brightness value (0–255)
@@ -37,9 +34,7 @@ void ledsSetup() {
 static void stripBreathe(CRGB color, uint8_t bpm, uint8_t lo, uint8_t hi) {
     uint8_t brightness = beatsin8(bpm, lo, hi);
     fill_solid(stripLeds, STRIP_NUM_LEDS, color);
-    gStripCtrl->setBrightness(brightness);
-    FastLED.show();
-    gStripCtrl->setBrightness(STRIP_BRIGHTNESS);  // Restore nominal brightness for other callers
+    gStripCtrl->showLeds(brightness);
 }
 
 // ── Idle: Rainbow Cycle ─────────────────────────────────────────────────────
@@ -50,7 +45,7 @@ void ledsIdle() {
 
     fill_rainbow(stripLeds, STRIP_NUM_LEDS, hueOffset, 7);
     hueOffset++;
-    FastLED.show();
+    gStripCtrl->showLeds(STRIP_BRIGHTNESS);
 }
 
 // ── Countdown: Progressive Fill ─────────────────────────────────────────────
@@ -69,7 +64,7 @@ void ledsCountdown(int step) {
 
     fill_solid(stripLeds, STRIP_NUM_LEDS, CRGB::Black);
     fill_solid(stripLeds, fillCount, color);
-    FastLED.show();
+    gStripCtrl->showLeds(STRIP_BRIGHTNESS);
 }
 
 // ── Playing: Slow Green Breathing Pulse (BPM=20) ────────────────────────────
@@ -90,7 +85,7 @@ void ledsFail() {
         strobeOn    = true;
         strobeCount = 1;
         fill_solid(stripLeds, STRIP_NUM_LEDS, CRGB::Red);
-        FastLED.show();
+        gStripCtrl->showLeds(STRIP_BRIGHTNESS);
         return;
     }
 
@@ -110,7 +105,7 @@ void ledsFail() {
         }
         // After all flashes, strip stays dark until ledsClear() is called
     }
-    FastLED.show();
+    gStripCtrl->showLeds(STRIP_BRIGHTNESS);
 }
 
 // ── Win: Confetti / Sparkle ─────────────────────────────────────────────────
@@ -122,7 +117,7 @@ void ledsWin() {
     fadeToBlackBy(stripLeds, STRIP_NUM_LEDS, 20);
     int pos = random16(STRIP_NUM_LEDS);
     stripLeds[pos] += CHSV(random8(), 200, 255);
-    FastLED.show();
+    gStripCtrl->showLeds(STRIP_BRIGHTNESS);
 }
 
 // ── Pro Mode: Fast Green Pulse (BPM=60) ──────────────────────────────────────
@@ -139,13 +134,13 @@ void ledsProRed() {
     if (now - lastUpdate < PLAY_UPDATE_MS) return;
     lastUpdate = now;
     fill_solid(stripLeds, STRIP_NUM_LEDS, CRGB::Red);
-    FastLED.show();
+    gStripCtrl->showLeds(STRIP_BRIGHTNESS);
 }
 
 // ── Clear: All Off, Reset Strobe State ──────────────────────────────────────
 void ledsClear() {
     fill_solid(stripLeds, STRIP_NUM_LEDS, CRGB::Black);
-    FastLED.show();
+    gStripCtrl->showLeds(STRIP_BRIGHTNESS);
     strobeCount = 0;
     strobeOn    = false;
     DEBUG_LOGLN("[LEDS] Cleared");

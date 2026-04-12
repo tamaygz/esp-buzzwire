@@ -4,6 +4,7 @@
 
 // ── Matrix LED Array ────────────────────────────────────────────────────────
 static CRGB matrixLeds[MATRIX_NUM_LEDS];
+static CLEDController* gMatrixCtrl = nullptr;
 
 // ── Font Character Width ─────────────────────────────────────────────────────
 // Every glyph in font8x8_basic occupies exactly 8 columns.
@@ -228,8 +229,7 @@ uint16_t XY(uint8_t x, uint8_t y) {
 
 // ── Setup ───────────────────────────────────────────────────────────────────
 void matrixSetup() {
-    FastLED.addLeds<WS2812B, MATRIX_PIN, GRB>(matrixLeds, MATRIX_NUM_LEDS)
-           .setBrightness(MATRIX_BRIGHTNESS);
+    gMatrixCtrl = &FastLED.addLeds<WS2812B, MATRIX_PIN, GRB>(matrixLeds, MATRIX_NUM_LEDS);
     matrixClear();
     Serial.println(F("[MATRIX] Setup complete"));
 }
@@ -237,7 +237,7 @@ void matrixSetup() {
 // ── Clear ───────────────────────────────────────────────────────────────────
 void matrixClear() {
     fill_solid(matrixLeds, MATRIX_NUM_LEDS, CRGB::Black);
-    FastLED.show();
+    gMatrixCtrl->showLeds(MATRIX_BRIGHTNESS);
 }
 
 // ── Scroll Reset ─────────────────────────────────────────────────────────────
@@ -276,7 +276,7 @@ void matrixDrawChar(int x, int y, char c, CRGB color) {
 void matrixShowLetter(char c, CRGB color) {
     fill_solid(matrixLeds, MATRIX_NUM_LEDS, CRGB::Black);
     matrixDrawChar(0, 0, c, color);
-    FastLED.show();
+    gMatrixCtrl->showLeds(MATRIX_BRIGHTNESS);
 }
 
 // ── Show a Number (1–2 digits, clamped to 0–99) ─────────────────────────────
@@ -295,7 +295,7 @@ void matrixShowNumber(int n, CRGB color) {
         matrixDrawChar( 4, 0, '0' + (n % 10), color);
     }
 
-    FastLED.show();
+    gMatrixCtrl->showLeds(MATRIX_BRIGHTNESS);
 }
 
 // ── Non-Blocking Scrolling Text ─────────────────────────────────────────────
@@ -327,7 +327,7 @@ void matrixScrollText(const char* text, CRGB color, int delayMs) {
         }
     }
 
-    FastLED.show();
+    gMatrixCtrl->showLeds(MATRIX_BRIGHTNESS);
 
     scrollOffset--;
     // Wrap: restart from right edge once the last character exits the left
