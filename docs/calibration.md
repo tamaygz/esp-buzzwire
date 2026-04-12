@@ -52,29 +52,22 @@ In `src/config.h`:
 
 #### Step-by-Step
 
-1. **Add debug output** — temporarily add a print statement in `main.cpp` `loop()` (before `gameLoop()`) to read live IR values:
-   ```cpp
-   // In main.cpp loop(), before gameLoop():
-   static unsigned long lastIRPrint = 0;
-   if (millis() - lastIRPrint > 200) {
-       int current = analogRead(A0);
-       Serial.print(F("[IR] current="));
-       Serial.print(current);
-       Serial.print(F(" delta="));
-       Serial.println(abs(current - 512));   // 512 is a rough midpoint; replace with your baseline
-       lastIRPrint = millis();
-   }
+1. **Enable debug output** — set `DEBUG_LOGGING=1` in `config.h` or flash the debug build:
+   ```bash
+   pio run -e d1_mini_debug -t upload
    ```
 
-2. **Flash and observe:**
-   - With your hand still near the wire → note the delta values (should be small, < 50).
-   - Move your hand along the wire path → note the delta values (should be larger).
+2. **Observe live IR values** in the Serial Monitor during PLAYING state:
+   ```
+   [IR] val=520 delta=8      ← hand still
+   [IR] val=531 delta=19
+   [IR] val=710 delta=198    ← hand moved
+   ```
 
-3. **Set threshold:**
-   - Set `IR_MOVE_THRESHOLD` to a value **between** the still-delta and moving-delta.
-   - Example: still delta ~30, moving delta ~200 → set threshold to 100–150.
+3. **Set threshold** between the still-delta and moving-delta:
+   - Still delta ~30, moving delta ~200 → set threshold to 100–150.
 
-4. **Remove debug output** after tuning (or leave it — it only prints during RED phase).
+4. **Disable debug output** when done (`DEBUG_LOGGING=0`) to restore production performance.
 
 ### Mounting Tips
 - Mount the sensor at 3–8 cm from the typical hand position.
@@ -150,29 +143,64 @@ pio device monitor -b 115200
 
 | Message | Meaning |
 |---|---|
-| `[IR] Calibrated baseline: 512` | IR sensor baseline captured at game start |
-| `[GAME] Start touched — countdown!` | Start pad detected contact |
-| `[GAME] FAIL #1` | Wire touch or movement-during-red detected |
-| `[GAME] PRO MODE FAIL (movement during RED) #2` | Specifically a Pro Mode movement fail |
-| `[GAME] WIN! Time: 15.2s Fails: 1` | Player reached finish |
+| `╔══ ESP Buzzwire v1.0.0 ╗` | Boot banner — Serial is working |
+| `[SENSORS] Setup complete` | Sensor pins configured |
+| `[LEDS] Setup complete` | LED strip initialised |
+| `[MATRIX] Setup complete` | Matrix initialised |
+| `[INIT] Pro Mode: ENABLED  sensor=IR` | Pro Mode active, IR selected |
+| `[IR] Calibrated baseline: 512` | IR baseline captured at game start |
+| `[PROMODE] → RED phase (freeze!)` | Red phase started |
+| `[PROMODE] → GREEN phase (safe to move)` | Green phase started |
+| `[GAME] IDLE → COUNTDOWN` | Start pad touched |
+| `[GAME] Countdown: 3` | Countdown digit displayed |
+| `[GAME] COUNTDOWN → PLAYING` | Game timer started |
+| `[GAME] Wire touched — FAIL #1` | Wire contact detected |
+| `[GAME] Pro Mode movement during RED — FAIL #2` | Pro Mode movement fail |
+| `[GAME] Finish touched — WIN! time=15.2s fails=1` | Player reached finish |
+| `[GAME] PLAYING → WIN` | Entering win state |
+| `[GAME] WIN → IDLE` | Returning to idle |
 
-### Adding Custom Debug Output
+### Enabling Verbose Debug Output
 
-You can temporarily add `Serial.print()` calls in any sensor function to read live values. Examples:
+Set `DEBUG_LOGGING` in `src/config.h` to enable detailed sensor and LED logging:
 
 ```cpp
-// In sensors.cpp — add to the top of loop or in a specific function:
-Serial.print(F("Wire: "));
-Serial.print(digitalRead(WIRE_PIN));
-Serial.print(F("  Start: "));
-Serial.print(digitalRead(START_PIN));
-Serial.print(F("  Finish: "));
-Serial.print(digitalRead(FINISH_PIN));
-Serial.print(F("  IR: "));
-Serial.print(analogRead(IR_PIN));
-Serial.print(F("  PIR: "));
-Serial.println(digitalRead(PIR_PIN));
+// src/config.h
+#define DEBUG_LOGGING      1    // Change from 0 to 1
 ```
+
+Or use the dedicated PlatformIO debug environment (no file edit needed):
+```bash
+pio run -e d1_mini_debug -t upload
+```
+
+When enabled you will also see (example):
+```
+[SENSORS] Wire TOUCHED
+[IR] val=687 delta=175
+[PIR] Motion detected
+[MATRIX] Scroll reset
+[MATRIX] Scroll started: TOUCH START
+[LEDS] Cleared
+```
+
+> **Note:** Debug output adds overhead. Disable it (`DEBUG_LOGGING=0`) for production builds.
+
+### IR Sensor — Live Value Monitoring
+
+With `DEBUG_LOGGING=1`, `irIsMoving()` prints every ADC reading to Serial. Use this to determine the right `IR_MOVE_THRESHOLD`:
+
+1. Flash the debug build (`pio run -e d1_mini_debug -t upload`).
+2. Start a game, complete the countdown (which runs `irCalibrate()`).
+3. During PLAYING, watch the Serial output for lines like:
+   ```
+   [IR] val=520 delta=8
+   [IR] val=531 delta=19
+   [IR] val=710 delta=198    ← hand moved
+   ```
+4. Set `IR_MOVE_THRESHOLD` between the still-delta and moving-delta values.
+
+
 
 ---
 

@@ -2,30 +2,34 @@
 #include "config.h"
 
 // ── Internal State ──────────────────────────────────────────────────────────
-static int irBaseline = 0;
+static int  irBaseline = 0;         // Calibrated ADC baseline; 0 = uncalibrated
 
 static unsigned long lastWireDebounce   = 0;
 static unsigned long lastStartDebounce  = 0;
 static unsigned long lastFinishDebounce = 0;
 
-static bool lastWireState   = false;
-static bool lastStartState  = false;
-static bool lastFinishState = false;
+static bool lastWireRaw   = false;
+static bool lastStartRaw  = false;
+static bool lastFinishRaw = false;
 
 // ── Debounced Digital Read Helper ───────────────────────────────────────────
-static bool debouncedRead(uint8_t pin, unsigned long &lastDebounce, bool &lastState) {
-    bool raw = (digitalRead(pin) == LOW);   // INPUT_PULLUP: LOW = contact
+// INPUT_PULLUP convention: LOW = contact, HIGH = open.
+// Returns true only after the raw reading has been stable for DEBOUNCE_MS.
+static bool debouncedRead(uint8_t pin, unsigned long &lastDebounce, bool &lastRaw) {
+    bool raw = (digitalRead(pin) == LOW);
     unsigned long now = millis();
 
-    if (raw != lastState) {
+    if (raw != lastRaw) {
+        // State changed — restart debounce timer
+        lastRaw      = raw;
         lastDebounce = now;
     }
-    lastState = raw;
 
+    // Confirm stable state only after quiet period
     if ((now - lastDebounce) >= DEBOUNCE_MS) {
         return raw;
     }
-    return false;
+    return false;   // Still within debounce window
 }
 
 // ── Setup ───────────────────────────────────────────────────────────────────
@@ -34,40 +38,61 @@ void sensorsSetup() {
     pinMode(START_PIN,  INPUT_PULLUP);
     pinMode(FINISH_PIN, INPUT_PULLUP);
     pinMode(PIR_PIN,    INPUT);
-    // A0 needs no pinMode on ESP8266
+    // A0 / IR_PIN: ESP8266 ADC needs no pinMode call
+
+    Serial.println(F("[SENSORS] Setup complete"));
+    DEBUG_LOGLN("[SENSORS] WIRE_PIN, START_PIN, FINISH_PIN → INPUT_PULLUP");
+    DEBUG_LOGLN("[SENSORS] PIR_PIN → INPUT");
 }
 
 // ── Contact Detection ───────────────────────────────────────────────────────
 bool isWireTouched() {
-    return debouncedRead(WIRE_PIN, lastWireDebounce, lastWireState);
+    bool v = debouncedRead(WIRE_PIN, lastWireDebounce, lastWireRaw);
+    if (v) { DEBUG_LOGLN("[SENSORS] Wire TOUCHED"); }
+    return v;
 }
 
 bool isStartTouched() {
-    return debouncedRead(START_PIN, lastStartDebounce, lastStartState);
+    bool v = debouncedRead(START_PIN, lastStartDebounce, lastStartRaw);
+    if (v) { DEBUG_LOGLN("[SENSORS] Start TOUCHED"); }
+    return v;
 }
 
 bool isFinishTouched() {
-    return debouncedRead(FINISH_PIN, lastFinishDebounce, lastFinishState);
+    bool v = debouncedRead(FINISH_PIN, lastFinishDebounce, lastFinishRaw);
+    if (v) { DEBUG_LOGLN("[SENSORS] Finish TOUCHED"); }
+    return v;
 }
 
 // ── IR Sensor ───────────────────────────────────────────────────────────────
+// Blocks for approximately IR_CALIBRATE_SAMPLES × 2 ms (~64 ms at default 32).
 void irCalibrate() {
     long sum = 0;
-    for (int i = 0; i < 32; i++) {
+    for (int i = 0; i < IR_CALIBRATE_SAMPLES; i++) {
         sum += analogRead(IR_PIN);
         delay(2);
     }
-    irBaseline = (int)(sum / 32);
+    irBaseline = (int)(sum / IR_CALIBRATE_SAMPLES);
     Serial.print(F("[IR] Calibrated baseline: "));
     Serial.println(irBaseline);
 }
 
 bool irIsMoving() {
     int current = analogRead(IR_PIN);
-    return abs(current - irBaseline) > IR_MOVE_THRESHOLD;
+    int delta   = abs(current - irBaseline);
+    bool moving = (delta > IR_MOVE_THRESHOLD);
+    DEBUG_LOG_2("[IR] val=", current, " delta=", delta);
+    return moving;
+}
+
+// Returns the last calibrated ADC baseline (0 if irCalibrate() has not been called).
+int irGetBaseline() {
+    return irBaseline;
 }
 
 // ── PIR Sensor ──────────────────────────────────────────────────────────────
 bool pirIsMoving() {
-    return digitalRead(PIR_PIN) == HIGH;
+    bool moving = (digitalRead(PIR_PIN) == HIGH);
+    if (moving) { DEBUG_LOGLN("[PIR] Motion detected"); }
+    return moving;
 }

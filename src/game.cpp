@@ -13,6 +13,18 @@ static int failCount            = 0;
 static unsigned long elapsed    = 0;
 static int countdownStep        = 3;
 
+// ── State Name Helper ────────────────────────────────────────────────────────
+const char* gameGetStateName(GameState s) {
+    switch (s) {
+        case STATE_IDLE:      return "IDLE";
+        case STATE_COUNTDOWN: return "COUNTDOWN";
+        case STATE_PLAYING:   return "PLAYING";
+        case STATE_FAIL:      return "FAIL";
+        case STATE_WIN:       return "WIN";
+        default:              return "UNKNOWN";
+    }
+}
+
 // ── Setup ───────────────────────────────────────────────────────────────────
 void gameSetup() {
     currentState = STATE_IDLE;
@@ -20,34 +32,41 @@ void gameSetup() {
     stateStart   = millis();
     failCount    = 0;
     elapsed      = 0;
+    countdownStep = 3;
 }
 
-// ── State Transition Helpers ────────────────────────────────────────────────
+// ── State Transition Helper ──────────────────────────────────────────────────
+// Resets the per-state timer, clears the matrix scroll position, and logs
+// the transition so it is always visible in the Serial monitor.
 static void enterState(GameState newState) {
+    Serial.print(F("[GAME] "));
+    Serial.print(gameGetStateName(currentState));
+    Serial.print(F(" → "));
+    Serial.println(gameGetStateName(newState));
+
     currentState = newState;
     stateStart   = millis();
+    matrixScrollReset();   // Always start fresh on state entry
 }
 
 // ── IDLE State ──────────────────────────────────────────────────────────────
 static void handleIdle() {
     ledsIdle();
-    matrixScrollText("TOUCH START", CRGB::Cyan, 80);
+    matrixScrollText("TOUCH START", CRGB::Cyan, SCROLL_IDLE_MS);
 
     if (isStartTouched()) {
-        // Reset game variables
         failCount     = 0;
         elapsed       = 0;
         countdownStep = 3;
         ledsClear();
         enterState(STATE_COUNTDOWN);
-        Serial.println(F("[GAME] Start touched — countdown!"));
     }
 }
 
 // ── COUNTDOWN State ─────────────────────────────────────────────────────────
 static void handleCountdown() {
-    unsigned long now = millis();
-    int stepIndex = (int)((now - stateStart) / COUNTDOWN_STEP_MS);
+    unsigned long now      = millis();
+    int           stepIndex = (int)((now - stateStart) / COUNTDOWN_STEP_MS);
 
     if (stepIndex < 3) {
         int digit = 3 - stepIndex;
@@ -56,14 +75,14 @@ static void handleCountdown() {
             Serial.print(F("[GAME] Countdown: "));
             Serial.println(digit);
         }
-        matrixShowNumber(3 - stepIndex, CRGB::Yellow);
-        ledsCountdown(3 - stepIndex);
+        matrixShowNumber(digit, CRGB::Yellow);
+        ledsCountdown(digit);
     } else if (stepIndex == 3) {
         if (countdownStep != 0) {
             countdownStep = 0;
             Serial.println(F("[GAME] GO!"));
         }
-        matrixScrollText("GO!", CRGB::Green, 30);
+        matrixScrollText("GO!", CRGB::Green, SCROLL_COUNTDOWN_MS);
         ledsCountdown(0);
     } else {
         // Countdown complete → PLAYING
@@ -76,7 +95,6 @@ static void handleCountdown() {
 #endif
 
         enterState(STATE_PLAYING);
-        Serial.println(F("[GAME] Playing — timer started"));
     }
 }
 
@@ -85,40 +103,39 @@ static void handlePlaying() {
     unsigned long now = millis();
     elapsed = now - timerStart;
 
-    // Check wire contact → FAIL
+    // Wire contact → FAIL
     if (isWireTouched()) {
         failCount++;
-        Serial.print(F("[GAME] FAIL #"));
+        Serial.print(F("[GAME] Wire touched — FAIL #"));
         Serial.println(failCount);
         enterState(STATE_FAIL);
         return;
     }
 
-    // Check finish pad → WIN
+    // Finish pad → WIN
     if (isFinishTouched()) {
-        Serial.print(F("[GAME] WIN! Time: "));
-        Serial.print(elapsed / 1000.0, 1);
-        Serial.print(F("s  Fails: "));
+        Serial.print(F("[GAME] Finish touched — WIN! time="));
+        Serial.print(elapsed / 1000UL);
+        Serial.print(F("s fails="));
         Serial.println(failCount);
         enterState(STATE_WIN);
         return;
     }
 
 #if PRO_MODE_ENABLED
-    // Pro Mode: update phase timing and discrete LEDs
+    // Pro Mode: advance phase timer and update discrete indicator LEDs
     promodeUpdate();
 
-    // Check movement during RED phase → FAIL
+    // Movement during RED phase → FAIL
     if (promodeIsRed() && promodeMovementDetected()) {
         failCount++;
-        Serial.print(F("[GAME] PRO MODE FAIL (movement during RED) #"));
+        Serial.print(F("[GAME] Pro Mode movement during RED — FAIL #"));
         Serial.println(failCount);
         enterState(STATE_FAIL);
         return;
     }
 
-    // Matrix: large 'G' (green) during GREEN so player knows they may move;
-    //         large 'R' (red) during RED as a freeze warning
+    // Matrix: 'G' (green) = player may move; 'R' (red) = freeze
     if (promodeIsGreen()) {
         matrixShowLetter('G', CRGB::Green);
         ledsProGreen();
@@ -127,80 +144,69 @@ static void handlePlaying() {
         ledsProRed();
     }
 #else
-    // Normal mode: elapsed time on matrix, slow green pulse on strip
+    // Normal mode: live elapsed time on matrix (seconds), slow green pulse
     matrixShowNumber((int)(elapsed / 1000), CRGB::White);
     ledsPlaying();
 #endif
+
+    DEBUG_LOG_VAL("[GAME] elapsed=", elapsed);
 }
 
 // ── FAIL State ──────────────────────────────────────────────────────────────
 static void handleFail() {
     unsigned long now = millis();
-    unsigned long dt = now - stateStart;
+    unsigned long dt  = now - stateStart;
 
-    // Buzz once at start of fail
+    // Single 500 ms buzzer tone at state entry
     if (dt < 10) {
         digitalWrite(BUZZER_PIN, HIGH);
     } else if (dt >= 500) {
         digitalWrite(BUZZER_PIN, LOW);
     }
 
-    // LED strobe
     ledsFail();
 
-    // Matrix: FAIL scroll → fail count number → GO BACK scroll
+    // Sequence: "FAIL" scroll → fail-count digit → "GO BACK" scroll
     if (dt < FAIL_DISPLAY_MS / 2) {
-        matrixScrollText("FAIL", CRGB::Red, 60);
-    } else if (dt < FAIL_DISPLAY_MS * 3 / 4) {
-        matrixShowNumber(failCount, CRGB::Orange);  // e.g. "3" = 3rd fail
+        matrixScrollText("FAIL", CRGB::Red, SCROLL_FAIL_MS);
+    } else if (dt < (FAIL_DISPLAY_MS * 3) / 4) {
+        matrixShowNumber(failCount, CRGB::Orange);
     } else {
-        matrixScrollText("GO BACK", CRGB::Orange, 60);
+        matrixScrollText("GO BACK", CRGB::Orange, SCROLL_FAIL_MS);
     }
 
-    // Return to idle after FAIL_DISPLAY_MS
     if (dt >= (unsigned long)FAIL_DISPLAY_MS) {
         digitalWrite(BUZZER_PIN, LOW);
         ledsClear();
         timerStart = 0;
         enterState(STATE_IDLE);
-        Serial.println(F("[GAME] Returning to IDLE — go back to start"));
     }
 }
 
 // ── WIN State ───────────────────────────────────────────────────────────────
 static void handleWin() {
     unsigned long now = millis();
-    unsigned long dt = now - stateStart;
+    unsigned long dt  = now - stateStart;
 
-    // Triple beep at start
-    if (dt < 100) {
-        digitalWrite(BUZZER_PIN, HIGH);
-    } else if (dt < 200) {
-        digitalWrite(BUZZER_PIN, LOW);
-    } else if (dt < 300) {
-        digitalWrite(BUZZER_PIN, HIGH);
-    } else if (dt < 400) {
-        digitalWrite(BUZZER_PIN, LOW);
-    } else if (dt < 500) {
-        digitalWrite(BUZZER_PIN, HIGH);
-    } else {
-        digitalWrite(BUZZER_PIN, LOW);
-    }
+    // Three short beeps: 100 ms on / 100 ms off × 3
+    if      (dt <  100) { digitalWrite(BUZZER_PIN, HIGH); }
+    else if (dt <  200) { digitalWrite(BUZZER_PIN, LOW);  }
+    else if (dt <  300) { digitalWrite(BUZZER_PIN, HIGH); }
+    else if (dt <  400) { digitalWrite(BUZZER_PIN, LOW);  }
+    else if (dt <  500) { digitalWrite(BUZZER_PIN, HIGH); }
+    else                { digitalWrite(BUZZER_PIN, LOW);  }
 
-    // Confetti on strip
     ledsWin();
 
-    // Scrolling win message: "WIN! Xs Yf"
+    // Build message once and keep the static buffer address stable for the scroll
     static char winMsg[32];
     snprintf(winMsg, sizeof(winMsg), "WIN! %lus %df",
-             elapsed / 1000, failCount);
-    matrixScrollText(winMsg, CRGB::Green, 80);
+             elapsed / 1000UL, failCount);
+    matrixScrollText(winMsg, CRGB::Green, SCROLL_WIN_MS);
 
-    // Return to idle after WIN_DISPLAY_MS
     if (dt >= (unsigned long)WIN_DISPLAY_MS) {
         ledsClear();
         enterState(STATE_IDLE);
-        Serial.println(F("[GAME] Returning to IDLE"));
     }
 }
 

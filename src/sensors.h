@@ -12,8 +12,10 @@ bool isStartTouched();
 bool isFinishTouched();
 
 // ── IR Sensor ───────────────────────────────────────────────────────────────
+// irCalibrate() must be called before irIsMoving(); blocks for ~64 ms.
 void irCalibrate();
 bool irIsMoving();
+int  irGetBaseline();   // Returns last calibrated ADC baseline (0 if not yet calibrated)
 
 // ── PIR Sensor ──────────────────────────────────────────────────────────────
 bool pirIsMoving();

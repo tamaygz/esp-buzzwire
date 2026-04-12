@@ -13,19 +13,25 @@ void promodeSetup() {
     pinMode(PRO_GREEN_LED_PIN, OUTPUT);
     digitalWrite(PRO_RED_LED_PIN,   LOW);
     digitalWrite(PRO_GREEN_LED_PIN, LOW);
+    DEBUG_LOGLN("[PROMODE] Setup complete — both LEDs off");
 }
 
 // ── Reset ───────────────────────────────────────────────────────────────────
+// Restarts the phase timer at GREEN. Call this at the start of every PLAYING
+// phase so the player always begins with the maximum movement window.
 void promodeReset() {
     phaseStart = millis();
     greenPhase = true;
     digitalWrite(PRO_GREEN_LED_PIN, HIGH);
     digitalWrite(PRO_RED_LED_PIN,   LOW);
+    Serial.println(F("[PROMODE] Phase reset → GREEN"));
 }
 
-// ── Update (call every loop tick) ───────────────────────────────────────────
+// ── Update (call every loop tick during PLAYING) ─────────────────────────────
+// Manages the GREEN ↔ RED phase timer and drives the discrete indicator LEDs.
+// Matrix display is intentionally left to the game state machine (game.cpp).
 void promodeUpdate() {
-    unsigned long now = millis();
+    unsigned long now     = millis();
     unsigned long elapsed = now - phaseStart;
 
     if (greenPhase) {
@@ -34,6 +40,7 @@ void promodeUpdate() {
             phaseStart = now;
             digitalWrite(PRO_GREEN_LED_PIN, LOW);
             digitalWrite(PRO_RED_LED_PIN,   HIGH);
+            Serial.println(F("[PROMODE] → RED phase (freeze!)"));
         }
     } else {
         if (elapsed >= (unsigned long)PRO_RED_DURATION) {
@@ -41,9 +48,9 @@ void promodeUpdate() {
             phaseStart = now;
             digitalWrite(PRO_GREEN_LED_PIN, HIGH);
             digitalWrite(PRO_RED_LED_PIN,   LOW);
+            Serial.println(F("[PROMODE] → GREEN phase (safe to move)"));
         }
     }
-    // Matrix display is handled by the game state machine (handlePlaying)
 }
 
 // ── Phase Queries ───────────────────────────────────────────────────────────
@@ -56,6 +63,7 @@ bool promodeIsRed() {
 }
 
 // ── Movement Detection ──────────────────────────────────────────────────────
+// Dispatches to the sensor(s) selected by PRO_MODE_SENSOR at compile time.
 bool promodeMovementDetected() {
 #if PRO_MODE_SENSOR == SENSOR_IR
     return irIsMoving();

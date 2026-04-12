@@ -5,11 +5,16 @@
 // ── Matrix LED Array ────────────────────────────────────────────────────────
 static CRGB matrixLeds[MATRIX_NUM_LEDS];
 
+// ── Font Character Width ─────────────────────────────────────────────────────
+// Every glyph in font8x8_basic occupies exactly 8 columns.
+static constexpr int FONT_CHAR_WIDTH = 8;
+
 // ── Scroll State (non-blocking) ─────────────────────────────────────────────
-static int scrollOffset      = 0;
-static unsigned long lastScroll = 0;
-static const char* scrollPtr = nullptr;
-static int scrollLen         = 0;
+static int           scrollOffset = 0;
+static unsigned long lastScroll   = 0;
+static const char*   scrollPtr    = nullptr;    // Pointer sentinel for change detection
+static int           scrollLen    = 0;
+static bool          scrollDirty  = true;       // Set by matrixScrollReset() or new content
 
 // ── font8x8_basic — Full printable ASCII 0x20–0x7E in PROGMEM ──────────────
 // Each character is 8 bytes; each byte is one row (LSB = left pixel).
@@ -207,12 +212,14 @@ static const uint8_t PROGMEM font8x8_basic[][8] = {
 };
 
 // ── XY Helper: Serpentine Layout ────────────────────────────────────────────
+// Maps (x, y) grid coordinates to a linear LED index.
+// Even rows run left→right; odd rows run right→left (MATRIX_SERPENTINE=1).
 uint16_t XY(uint8_t x, uint8_t y) {
     if (x >= MATRIX_WIDTH || y >= MATRIX_HEIGHT) return 0;
 
 #if MATRIX_SERPENTINE
-    // Even rows: left-to-right; Odd rows: right-to-left
     if (y & 1) {
+        // Odd row: right-to-left
         return y * MATRIX_WIDTH + (MATRIX_WIDTH - 1 - x);
     }
 #endif
@@ -224,6 +231,7 @@ void matrixSetup() {
     FastLED.addLeds<WS2812B, MATRIX_PIN, GRB>(matrixLeds, MATRIX_NUM_LEDS)
            .setBrightness(MATRIX_BRIGHTNESS);
     matrixClear();
+    Serial.println(F("[MATRIX] Setup complete"));
 }
 
 // ── Clear ───────────────────────────────────────────────────────────────────
@@ -232,14 +240,27 @@ void matrixClear() {
     FastLED.show();
 }
 
+// ── Scroll Reset ─────────────────────────────────────────────────────────────
+// Forces the next matrixScrollText() call to restart from the right edge.
+// Call this whenever entering a new game state to avoid carrying over stale
+// scroll position from a previous animation.
+void matrixScrollReset() {
+    scrollDirty  = true;
+    scrollPtr    = nullptr;
+    scrollOffset = MATRIX_WIDTH;
+    DEBUG_LOGLN("[MATRIX] Scroll reset");
+}
+
 // ── Draw a Single Character at (x, y) ──────────────────────────────────────
+// Clips pixels outside the 8×8 bounds; accepts x values down to −FONT_CHAR_WIDTH
+// to support partial characters during scrolling.
 void matrixDrawChar(int x, int y, char c, CRGB color) {
     if (c < 0x20 || c > 0x7E) c = ' ';
     uint8_t idx = (uint8_t)c - 0x20;
 
-    for (int row = 0; row < 8; row++) {
+    for (int row = 0; row < FONT_CHAR_WIDTH; row++) {
         uint8_t rowData = pgm_read_byte(&font8x8_basic[idx][row]);
-        for (int col = 0; col < 8; col++) {
+        for (int col = 0; col < FONT_CHAR_WIDTH; col++) {
             int px = x + col;
             int py = y + row;
             if (px >= 0 && px < MATRIX_WIDTH && py >= 0 && py < MATRIX_HEIGHT) {
@@ -251,45 +272,46 @@ void matrixDrawChar(int x, int y, char c, CRGB color) {
     }
 }
 
-// ── Show a Single Large Character (centered) ────────────────────────────────
+// ── Show a Single Large Character (fills full 8×8) ──────────────────────────
 void matrixShowLetter(char c, CRGB color) {
     fill_solid(matrixLeds, MATRIX_NUM_LEDS, CRGB::Black);
     matrixDrawChar(0, 0, c, color);
     FastLED.show();
 }
 
-// ── Show a Number (1–2 digits) ──────────────────────────────────────────────
+// ── Show a Number (1–2 digits, clamped to 0–99) ─────────────────────────────
 void matrixShowNumber(int n, CRGB color) {
     fill_solid(matrixLeds, MATRIX_NUM_LEDS, CRGB::Black);
 
-    if (n < 0) n = 0;
+    if (n < 0)  n = 0;
     if (n > 99) n = 99;
 
     if (n < 10) {
-        // Single digit — centered
+        // Single digit — left-aligned (full 8×8 glyph)
         matrixDrawChar(0, 0, '0' + n, color);
     } else {
-        // Two digits — scroll-style: tens on left half, ones shifted
-        char tens = '0' + (n / 10);
-        char ones = '0' + (n % 10);
-        // Draw tens at x=-1 (partial) and ones at x=4
-        matrixDrawChar(-1, 0, tens, color);
-        matrixDrawChar(4, 0, ones, color);
+        // Two digits — tens at x=−1 (right half visible), ones at x=4
+        matrixDrawChar(-1, 0, '0' + (n / 10), color);
+        matrixDrawChar( 4, 0, '0' + (n % 10), color);
     }
 
     FastLED.show();
 }
 
 // ── Non-Blocking Scrolling Text ─────────────────────────────────────────────
+// Call every loop tick. Advances one pixel column per delayMs milliseconds.
+// Automatically loops. Call matrixScrollReset() first to restart from scratch.
 void matrixScrollText(const char* text, CRGB color, int delayMs) {
     unsigned long now = millis();
 
-    // Detect new text → reset scroll position
-    if (text != scrollPtr) {
+    // Reset when the text pointer changes OR when an explicit reset was requested
+    if (scrollDirty || text != scrollPtr) {
         scrollPtr    = text;
         scrollLen    = (int)strlen(text);
-        scrollOffset = MATRIX_WIDTH;   // start off-screen right
+        scrollOffset = MATRIX_WIDTH;   // Start one full matrix-width off the right edge
         lastScroll   = now;
+        scrollDirty  = false;
+        DEBUG_LOG_VAL("[MATRIX] Scroll started: ", text);
     }
 
     if (now - lastScroll < (unsigned long)delayMs) return;
@@ -297,10 +319,10 @@ void matrixScrollText(const char* text, CRGB color, int delayMs) {
 
     fill_solid(matrixLeds, MATRIX_NUM_LEDS, CRGB::Black);
 
-    // Render each character at the correct horizontal offset
+    // Render each visible character at its current horizontal position
     for (int i = 0; i < scrollLen; i++) {
-        int charX = scrollOffset + i * 8;
-        if (charX > -8 && charX < MATRIX_WIDTH) {
+        int charX = scrollOffset + i * FONT_CHAR_WIDTH;
+        if (charX > -FONT_CHAR_WIDTH && charX < MATRIX_WIDTH) {
             matrixDrawChar(charX, 0, text[i], color);
         }
     }
@@ -308,9 +330,8 @@ void matrixScrollText(const char* text, CRGB color, int delayMs) {
     FastLED.show();
 
     scrollOffset--;
-    // Wrap around when fully scrolled past
-    int totalWidth = scrollLen * 8;
-    if (scrollOffset < -totalWidth) {
+    // Wrap: restart from right edge once the last character exits the left
+    if (scrollOffset < -(scrollLen * FONT_CHAR_WIDTH)) {
         scrollOffset = MATRIX_WIDTH;
     }
 }

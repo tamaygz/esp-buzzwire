@@ -139,21 +139,32 @@ If you're unsure about your matrix layout, change the firmware temporarily to li
 
 ### Enable Verbose Logging
 
-Add temporary print statements in `game.cpp`:
+The firmware has a built-in debug logging system. Enable it without modifying source files by flashing the debug build:
+
+```bash
+pio run -e d1_mini_debug -t upload
+pio device monitor -b 115200
+```
+
+Or set `DEBUG_LOGGING=1` in `src/config.h` before a regular build:
 
 ```cpp
-// In main.cpp loop(), before gameLoop():
-static unsigned long lastDebugPrint = 0;
-if (millis() - lastDebugPrint > 1000) {
+// src/config.h
+#define DEBUG_LOGGING      1   // 0 = silent (production), 1 = verbose
+```
+
+When enabled, extra detail is printed for every sensor read, matrix scroll, LED state change, and Pro Mode phase transition.
+
+To inspect live pin states from the Serial Monitor using `gameGetStateName()`:
+```cpp
+// Temporarily add to main.cpp loop(), before gameLoop():
+static unsigned long t = 0;
+if (millis() - t > 1000) {
+    t = millis();
     Serial.print(F("State: "));
-    Serial.print(gameGetState());
-    Serial.print(F("  Wire: "));
-    Serial.print(digitalRead(WIRE_PIN));
-    Serial.print(F("  Start: "));
-    Serial.print(digitalRead(START_PIN));
-    Serial.print(F("  Finish: "));
-    Serial.println(digitalRead(FINISH_PIN));
-    lastDebugPrint = millis();
+    Serial.print(gameGetStateName(gameGetState()));
+    Serial.print(F("  Wire: ")); Serial.print(digitalRead(WIRE_PIN));
+    Serial.print(F("  IR baseline: ")); Serial.println(irGetBaseline());
 }
 ```
 
@@ -161,11 +172,13 @@ if (millis() - lastDebugPrint > 1000) {
 
 | Message | Meaning |
 |---|---|
-| `=== ESP Buzzwire Game ===` | Boot successful |
-| `[INIT] Pro Mode: ENABLED` | Pro Mode is active |
-| `[IR] Calibrated baseline: NNN` | IR sensor baseline captured |
-| `[GAME] Start touched` | Start pad contact detected |
-| `[GAME] FAIL #N` | Wire contact or movement detected |
-| `[GAME] WIN! Time: Xs Fails: N` | Player reached finish |
+| `╔══ ESP Buzzwire v1.0.0 ╗` | Boot banner — Serial working |
+| `[INIT] Pro Mode: ENABLED  sensor=IR` | Pro Mode active |
+| `[IR] Calibrated baseline: NNN` | IR sensor calibrated |
+| `[PROMODE] → RED phase (freeze!)` | Red phase started |
+| `[GAME] IDLE → COUNTDOWN` | Start pad contact detected |
+| `[GAME] Wire touched — FAIL #N` | Wire contact detected |
+| `[GAME] Pro Mode movement during RED — FAIL #N` | Movement fail |
+| `[GAME] Finish touched — WIN! time=Xs fails=N` | Player finished |
 | No output at all | Check baud rate (115200), USB connection, correct COM port |
 | Garbled text | Wrong baud rate in Serial Monitor |

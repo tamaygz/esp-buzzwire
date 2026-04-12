@@ -16,9 +16,13 @@ enum GameState {
 void gameSetup();
 void gameLoop();
 
-// ── Accessors (for debug / display) ─────────────────────────────────────────
-GameState gameGetState();
+// ── Accessors ───────────────────────────────────────────────────────────────
+GameState    gameGetState();
 unsigned long gameGetElapsed();
-int gameGetFailCount();
+int          gameGetFailCount();
+
+// Returns a short human-readable name for the given state (e.g. "PLAYING").
+// Useful for Serial debug output and diagnostics.
+const char*  gameGetStateName(GameState s);
 
 #endif // GAME_H

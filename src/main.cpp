@@ -1,7 +1,10 @@
 // ── ESP Buzzwire Game — Main Entry Point ────────────────────────────────────
 //
-// All logic flows through the game state machine.
-// Module setup functions are called here, then gameLoop() drives everything.
+// All logic flows through the game state machine (game.cpp).
+// This file is responsible only for hardware init and the Arduino loop.
+//
+// Serial output at 115200 baud gives a live log of all game events.
+// To enable verbose sensor/LED debug output set DEBUG_LOGGING=1 in config.h.
 
 #include <Arduino.h>
 #include "config.h"
@@ -15,8 +18,11 @@
 void setup() {
     Serial.begin(115200);
     Serial.println();
-    Serial.println(F("=== ESP Buzzwire Game ==="));
+    Serial.println(F("╔══════════════════════════╗"));
+    Serial.println(F("║   ESP Buzzwire  v1.0.0   ║"));
+    Serial.println(F("╚══════════════════════════╝"));
 
+    // Buzzer off by default
     pinMode(BUZZER_PIN, OUTPUT);
     digitalWrite(BUZZER_PIN, LOW);
 
@@ -26,13 +32,24 @@ void setup() {
 
 #if PRO_MODE_ENABLED
     promodeSetup();
-    Serial.println(F("[INIT] Pro Mode: ENABLED"));
+    Serial.print(F("[INIT] Pro Mode: ENABLED  sensor="));
+  #if   PRO_MODE_SENSOR == SENSOR_IR
+    Serial.println(F("IR"));
+  #elif PRO_MODE_SENSOR == SENSOR_PIR
+    Serial.println(F("PIR"));
+  #elif PRO_MODE_SENSOR == SENSOR_BOTH
+    Serial.println(F("IR+PIR"));
+  #endif
 #else
     Serial.println(F("[INIT] Pro Mode: DISABLED"));
 #endif
 
+#if DEBUG_LOGGING
+    Serial.println(F("[INIT] Debug logging: ON"));
+#endif
+
     gameSetup();
-    Serial.println(F("[INIT] Ready — touch the START pad!"));
+    Serial.println(F("[INIT] Ready — touch the START pad to begin!"));
 }
 
 // ── Loop ────────────────────────────────────────────────────────────────────
