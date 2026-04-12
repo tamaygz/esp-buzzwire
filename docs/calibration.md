@@ -52,17 +52,17 @@ In `src/config.h`:
 
 #### Step-by-Step
 
-1. **Add debug output** — temporarily add this to `sensors.cpp` in the `irIsMoving()` function:
+1. **Add debug output** — temporarily add a print statement in `main.cpp` `loop()` (before `gameLoop()`) to read live IR values:
    ```cpp
-   bool irIsMoving() {
-       int current = analogRead(IR_PIN);
+   // In main.cpp loop(), before gameLoop():
+   static unsigned long lastIRPrint = 0;
+   if (millis() - lastIRPrint > 200) {
+       int current = analogRead(A0);
        Serial.print(F("[IR] current="));
        Serial.print(current);
-       Serial.print(F(" baseline="));
-       Serial.print(irBaseline);
        Serial.print(F(" delta="));
-       Serial.println(abs(current - irBaseline));
-       return abs(current - irBaseline) > IR_MOVE_THRESHOLD;
+       Serial.println(abs(current - 512));   // 512 is a rough midpoint; replace with your baseline
+       lastIRPrint = millis();
    }
    ```
 

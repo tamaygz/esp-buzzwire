@@ -142,11 +142,11 @@ If you're unsure about your matrix layout, change the firmware temporarily to li
 Add temporary print statements in `game.cpp`:
 
 ```cpp
-// At the top of gameLoop():
+// In main.cpp loop(), before gameLoop():
 static unsigned long lastDebugPrint = 0;
 if (millis() - lastDebugPrint > 1000) {
     Serial.print(F("State: "));
-    Serial.print(currentState);
+    Serial.print(gameGetState());
     Serial.print(F("  Wire: "));
     Serial.print(digitalRead(WIRE_PIN));
     Serial.print(F("  Start: "));
