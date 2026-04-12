@@ -117,10 +117,10 @@ static void handlePlaying() {
         return;
     }
 
-    // Matrix: elapsed time (cyan) during GREEN so player can track progress;
+    // Matrix: large 'G' (green) during GREEN so player knows they may move;
     //         large 'R' (red) during RED as a freeze warning
     if (promodeIsGreen()) {
-        matrixShowNumber((int)(elapsed / 1000), CRGB::Cyan);
+        matrixShowLetter('G', CRGB::Green);
         ledsProGreen();
     } else {
         matrixShowLetter('R', CRGB::Red);

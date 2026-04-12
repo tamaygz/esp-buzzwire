@@ -2,8 +2,9 @@
 #include "config.h"
 #include <FastLED.h>
 
-// ── Strip Array ─────────────────────────────────────────────────────────────
+// ── Strip Array & Controller ────────────────────────────────────────────────
 static CRGB stripLeds[STRIP_NUM_LEDS];
+static CLEDController* gStripCtrl = nullptr;
 
 // ── Internal Timing ─────────────────────────────────────────────────────────
 static unsigned long lastUpdate = 0;
@@ -14,8 +15,8 @@ static unsigned long strobeTimer = 0;
 
 // ── Setup ───────────────────────────────────────────────────────────────────
 void ledsSetup() {
-    FastLED.addLeds<WS2812B, STRIP_PIN, GRB>(stripLeds, STRIP_NUM_LEDS);
-    FastLED.setBrightness(STRIP_BRIGHTNESS);
+    gStripCtrl = &FastLED.addLeds<WS2812B, STRIP_PIN, GRB>(stripLeds, STRIP_NUM_LEDS);
+    gStripCtrl->setBrightness(STRIP_BRIGHTNESS);
     fill_solid(stripLeds, STRIP_NUM_LEDS, CRGB::Black);
     FastLED.show();
 }
@@ -58,9 +59,9 @@ void ledsPlaying() {
 
     uint8_t brightness = beatsin8(20, 60, 200);   // BPM=20, min=60, max=200
     fill_solid(stripLeds, STRIP_NUM_LEDS, CRGB::Green);
-    FastLED.setBrightness(brightness);
+    gStripCtrl->setBrightness(brightness);
     FastLED.show();
-    FastLED.setBrightness(STRIP_BRIGHTNESS);       // restore for other callers
+    gStripCtrl->setBrightness(STRIP_BRIGHTNESS);  // restore for other callers
 }
 
 // ── Fail: Red Strobe Flash x3 ──────────────────────────────────────────────
@@ -114,9 +115,9 @@ void ledsProGreen() {
 
     uint8_t brightness = beatsin8(60, 80, 255);    // BPM=60, faster pulse
     fill_solid(stripLeds, STRIP_NUM_LEDS, CRGB::Green);
-    FastLED.setBrightness(brightness);
+    gStripCtrl->setBrightness(brightness);
     FastLED.show();
-    FastLED.setBrightness(STRIP_BRIGHTNESS);
+    gStripCtrl->setBrightness(STRIP_BRIGHTNESS);
 }
 
 // ── Pro Mode: Steady Red Solid ──────────────────────────────────────────────

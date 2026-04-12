@@ -221,8 +221,8 @@ uint16_t XY(uint8_t x, uint8_t y) {
 
 // ── Setup ───────────────────────────────────────────────────────────────────
 void matrixSetup() {
-    FastLED.addLeds<WS2812B, MATRIX_PIN, GRB>(matrixLeds, MATRIX_NUM_LEDS);
-    FastLED.setBrightness(MATRIX_BRIGHTNESS);
+    FastLED.addLeds<WS2812B, MATRIX_PIN, GRB>(matrixLeds, MATRIX_NUM_LEDS)
+           .setBrightness(MATRIX_BRIGHTNESS);
     matrixClear();
 }
 
