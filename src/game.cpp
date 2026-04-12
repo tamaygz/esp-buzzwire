@@ -63,7 +63,7 @@ static void handleCountdown() {
             countdownStep = 0;
             Serial.println(F("[GAME] GO!"));
         }
-        matrixShowLetter('G', CRGB::Green);
+        matrixScrollText("GO!", CRGB::Green, 30);
         ledsCountdown(0);
     } else {
         // Countdown complete → PLAYING
@@ -105,9 +105,10 @@ static void handlePlaying() {
     }
 
 #if PRO_MODE_ENABLED
-    // Pro Mode: update traffic light and check movement during red
+    // Pro Mode: update phase timing and discrete LEDs
     promodeUpdate();
 
+    // Check movement during RED phase → FAIL
     if (promodeIsRed() && promodeMovementDetected()) {
         failCount++;
         Serial.print(F("[GAME] PRO MODE FAIL (movement during RED) #"));
@@ -116,16 +117,18 @@ static void handlePlaying() {
         return;
     }
 
-    // LED strip reflects pro mode phase
+    // Matrix: elapsed time (cyan) during GREEN so player can track progress;
+    //         large 'R' (red) during RED as a freeze warning
     if (promodeIsGreen()) {
+        matrixShowNumber((int)(elapsed / 1000), CRGB::Cyan);
         ledsProGreen();
     } else {
+        matrixShowLetter('R', CRGB::Red);
         ledsProRed();
     }
 #else
-    // Normal mode: show elapsed time on matrix, green pulse on strip
-    int secs = (int)(elapsed / 1000);
-    matrixShowNumber(secs, CRGB::White);
+    // Normal mode: elapsed time on matrix, slow green pulse on strip
+    matrixShowNumber((int)(elapsed / 1000), CRGB::White);
     ledsPlaying();
 #endif
 }
@@ -145,9 +148,11 @@ static void handleFail() {
     // LED strobe
     ledsFail();
 
-    // Matrix message
+    // Matrix: FAIL scroll → fail count number → GO BACK scroll
     if (dt < FAIL_DISPLAY_MS / 2) {
         matrixScrollText("FAIL", CRGB::Red, 60);
+    } else if (dt < FAIL_DISPLAY_MS * 3 / 4) {
+        matrixShowNumber(failCount, CRGB::Orange);  // e.g. "3" = 3rd fail
     } else {
         matrixScrollText("GO BACK", CRGB::Orange, 60);
     }

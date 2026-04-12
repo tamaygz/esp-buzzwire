@@ -1,7 +1,6 @@
 #include "promode.h"
 #include "config.h"
 #include "sensors.h"
-#include "matrix.h"
 #include <Arduino.h>
 
 // ── Internal State ──────────────────────────────────────────────────────────
@@ -44,13 +43,7 @@ void promodeUpdate() {
             digitalWrite(PRO_RED_LED_PIN,   LOW);
         }
     }
-
-    // Reflect state on matrix
-    if (greenPhase) {
-        matrixShowLetter('G', CRGB::Green);
-    } else {
-        matrixShowLetter('R', CRGB::Red);
-    }
+    // Matrix display is handled by the game state machine (handlePlaying)
 }
 
 // ── Phase Queries ───────────────────────────────────────────────────────────

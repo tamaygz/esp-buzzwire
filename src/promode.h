@@ -7,7 +7,7 @@
 void promodeSetup();
 
 // ── Runtime ─────────────────────────────────────────────────────────────────
-void promodeUpdate();              // Call every loop tick during PLAYING
+void promodeUpdate();              // Call every loop tick during PLAYING; updates phase timer + discrete LEDs
 bool promodeIsGreen();
 bool promodeIsRed();
 bool promodeMovementDetected();    // Checks sensor(s) per PRO_MODE_SENSOR config
