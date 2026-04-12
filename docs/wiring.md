@@ -140,13 +140,13 @@ Each pad is a **bare metal surface** connected to **GND**. The corresponding GPI
     │ OUT (digital) ──────│──── D7 (GPIO13)
     └─────────────────────┘
     Sensitivity pot: turn CCW to reduce range
-    Retrigger jumper: set to "L" (single trigger)
+    Retrigger jumper: set to "H" (repeatable trigger)
 ```
 
 - Mount above or beside the wire path, pointing at the player's arm/hand area.
 - **Important:** HC-SR501 operates at 5 V but its digital output is typically 3.3 V compatible. Verify with a multimeter.
 - Adjust the **sensitivity potentiometer** to cover just the immediate play area.
-- Set the **retrigger jumper** to single-trigger mode ("L" position) for cleaner detection.
+- Set the **retrigger jumper** to repeatable-trigger mode (**"H" position**) — this keeps the output HIGH as long as motion continues, giving accurate readings during the RED phase. The "L" (single-trigger) mode causes the output to drop briefly even when the player is still moving, leading to missed detections.
 
 ---
 

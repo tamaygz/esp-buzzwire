@@ -11,7 +11,7 @@ A modern, ESP8266-powered buzzwire skill game with individually addressable RGB 
 - ⏱️ **Full Game State Machine** — IDLE → COUNTDOWN → PLAYING → FAIL/WIN → IDLE
 - 🔴🟢 **Pro Mode** — traffic-light challenge with configurable IR and/or PIR movement detection
 - 🔊 **Buzzer Feedback** — fail tone and win beeps
-- ⚡ **Non-Blocking** — all effects use `millis()`, no delays in the main loop
+- ⚡ **Non-Blocking Gameplay** — all game effects use `millis()`, no delays in the main loop; IR sensor calibration uses a short ~64 ms blocking average at game start
 - 🛠️ **Highly Configurable** — all pins, thresholds, and timings in a single `config.h`
 
 ---

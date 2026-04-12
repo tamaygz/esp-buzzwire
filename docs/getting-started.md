@@ -52,8 +52,8 @@ Open `src/config.h` and adjust for your hardware:
 // Match your LED strip length:
 #define STRIP_NUM_LEDS     30       // Change to your actual LED count
 
-// Enable/disable Pro Mode:
-#define PRO_MODE_ENABLED   true     // Set false if no IR/PIR sensors
+// Enable/disable Pro Mode (1 = enabled, 0 = disabled):
+#define PRO_MODE_ENABLED   1        // Set to 0 if no IR/PIR sensors
 
 // Choose Pro Mode sensor:
 #define PRO_MODE_SENSOR    SENSOR_IR   // SENSOR_IR, SENSOR_PIR, or SENSOR_BOTH
@@ -96,30 +96,38 @@ pio device monitor -b 115200
 When the firmware boots, you'll see:
 
 ```
-=== ESP Buzzwire Game ===
-[IR] Calibrated baseline: 512
-[INIT] Pro Mode: ENABLED
-[INIT] Ready — touch the START pad!
+╔══════════════════════════╗
+║  ESP Buzzwire v1.0.0     ║
+╚══════════════════════════╝
+[SENSORS] Setup complete
+[LEDS] Setup complete
+[MATRIX] Setup complete
+[INIT] Pro Mode: ENABLED  sensor=IR
+[INIT] Debug logging: OFF
 ```
 
 During gameplay:
 
 ```
-[GAME] Start touched — countdown!
+[GAME] IDLE → COUNTDOWN
 [GAME] Countdown: 3
 [GAME] Countdown: 2
 [GAME] Countdown: 1
 [GAME] GO!
-[GAME] Playing — timer started
-[GAME] FAIL #1
-[GAME] Returning to IDLE — go back to start
+[IR] Calibrated baseline: 512
+[GAME] COUNTDOWN → PLAYING
+[GAME] Wire touched — FAIL #1
+[GAME] PLAYING → FAIL
+[GAME] FAIL → IDLE
 ```
 
 On a win:
 
 ```
-[GAME] WIN! Time: 23.4s  Fails: 2
-[GAME] Returning to IDLE
+[GAME] Finish touched — WIN! time=23s fails=2
+[GAME] PLAYING → WIN
+[GAME] WIN message: WIN! 23s 2f
+[GAME] WIN → IDLE
 ```
 
 ---

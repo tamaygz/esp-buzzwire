@@ -23,8 +23,8 @@ Pro Mode adds a **traffic-light challenge** to the buzzwire game: a red/green cy
 In `src/config.h`:
 
 ```cpp
-// Master toggle — set to false to disable Pro Mode entirely
-#define PRO_MODE_ENABLED   true
+// Master toggle — set to 0 to disable Pro Mode entirely
+#define PRO_MODE_ENABLED   1
 ```
 
 When disabled:
