@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Buzzwire – Sounds</title>
+<link rel="stylesheet" href="style.css">
+<script src="header.js"></script>
+<script src="ws.js"></script>
+</head>
+<body>
+<main>
+  <h2>Sound URLs</h2>
+  <p class="muted" style="font-size:.85rem;margin-bottom:18px">
+    Enter remote audio URLs (MP3 / OGG) for each event. The browser plays these when the
+    game state changes — the ESP itself does not stream audio.
+  </p>
+
+  <form id="soundForm">
+    <div class="card">
+      <div class="field">
+        <label>Start sound URL</label>
+        <input type="url" id="sndStart" placeholder="https://…/start.mp3">
+      </div>
+      <div class="field">
+        <label>Countdown sound URL</label>
+        <input type="url" id="sndCountdown" placeholder="https://…/countdown.mp3">
+      </div>
+      <div class="field">
+        <label>Fail sound URL</label>
+        <input type="url" id="sndFail" placeholder="https://…/fail.mp3">
+      </div>
+      <div class="field">
+        <label>Win sound URL</label>
+        <input type="url" id="sndWin" placeholder="https://…/win.mp3">
+      </div>
+    </div>
+
+    <div class="gap mt">
+      <button type="submit" class="btn btn-primary">Save</button>
+      <button type="button" class="btn btn-ghost" onclick="testSound()">&#9654; Test Win Sound</button>
+    </div>
+  </form>
+</main>
+
+<script>
+let sounds = {};
+
+function populate(s) {
+  sounds = s;
+  document.getElementById('sndStart').value     = s.start     || '';
+  document.getElementById('sndCountdown').value = s.countdown || '';
+  document.getElementById('sndFail').value      = s.fail      || '';
+  document.getElementById('sndWin').value       = s.win       || '';
+}
+
+fetch('/api/sounds').then(r => r.json()).then(populate).catch(() => {});
+
+document.getElementById('soundForm').addEventListener('submit', function(e) {
+  e.preventDefault();
+  const body = {
+    start:     document.getElementById('sndStart').value.trim(),
+    countdown: document.getElementById('sndCountdown').value.trim(),
+    fail:      document.getElementById('sndFail').value.trim(),
+    win:       document.getElementById('sndWin').value.trim(),
+  };
+  fetch('/api/sounds', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) })
+    .then(r => r.json())
+    .then(() => showToast('Sounds saved'))
+    .catch(() => showToast('Save failed', true));
+});
+
+function testSound() {
+  const url = document.getElementById('sndWin').value.trim();
+  if (!url) { showToast('No win URL set', true); return; }
+  new Audio(url).play().catch(() => showToast('Playback blocked by browser', true));
+}
+
+// Play sounds when WS state events arrive
+wsOn('state', function(d) {
+  const map = { COUNTDOWN: sounds.countdown, PLAYING: sounds.start, FAIL: sounds.fail, WIN: sounds.win };
+  const url = map[d.state];
+  if (url) new Audio(url).play().catch(() => {});
+});
+</script>
+</body>
+</html>

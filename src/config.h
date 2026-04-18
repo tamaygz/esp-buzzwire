@@ -3,6 +3,9 @@
 
 #include <Arduino.h>
 
+// ── Firmware Version ─────────────────────────────────────────────────────────
+#define FW_VERSION  "1.1.0"
+
 // ── Debug Logging ────────────────────────────────────────────────────────────
 // Set to 1 to enable verbose sensor/LED/promode debug output on Serial.
 // Leave at 0 for production builds (saves RAM and CPU time).

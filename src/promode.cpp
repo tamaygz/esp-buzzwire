@@ -1,5 +1,6 @@
 #include "promode.h"
 #include "config.h"
+#include "game_config.h"
 #include "sensors.h"
 #include <Arduino.h>
 
@@ -7,6 +8,12 @@
 static unsigned long phaseStart    = 0;
 static unsigned long phaseDuration = 0;
 static bool greenPhase = true;
+
+static void (*sPhaseChangeCb)(bool isGreen, unsigned long durationMs) = nullptr;
+
+void promodeOnPhaseChange(void (*cb)(bool isGreen, unsigned long durationMs)) {
+    sPhaseChangeCb = cb;
+}
 
 static unsigned long randomDuration(unsigned long lo, unsigned long hi) {
     return lo + (random(hi - lo + 1));
@@ -26,11 +33,12 @@ void promodeSetup() {
 // phase so the player always begins with the maximum movement window.
 void promodeReset() {
     phaseStart    = millis();
-    phaseDuration = randomDuration(PRO_GREEN_MIN, PRO_GREEN_MAX);
+    phaseDuration = randomDuration(cfg.proGreenMin, cfg.proGreenMax);
     greenPhase    = true;
     digitalWrite(PRO_GREEN_LED_PIN, HIGH);
     digitalWrite(PRO_RED_LED_PIN,   LOW);
     Serial.print(F("[PROMODE] Phase reset → GREEN ("));  Serial.print(phaseDuration);  Serial.println(F("ms)"));
+    if (sPhaseChangeCb) sPhaseChangeCb(true, phaseDuration);
 }
 
 // ── Update (call every loop tick during PLAYING) ─────────────────────────────
@@ -44,19 +52,21 @@ void promodeUpdate() {
         if (elapsed >= phaseDuration) {
             greenPhase    = false;
             phaseStart    = now;
-            phaseDuration = randomDuration(PRO_RED_MIN, PRO_RED_MAX);
+            phaseDuration = randomDuration(cfg.proRedMin, cfg.proRedMax);
             digitalWrite(PRO_GREEN_LED_PIN, LOW);
             digitalWrite(PRO_RED_LED_PIN,   HIGH);
             Serial.print(F("[PROMODE] → RED phase (freeze!) "));  Serial.print(phaseDuration);  Serial.println(F("ms"));
+            if (sPhaseChangeCb) sPhaseChangeCb(false, phaseDuration);
         }
     } else {
         if (elapsed >= phaseDuration) {
             greenPhase    = true;
             phaseStart    = now;
-            phaseDuration = randomDuration(PRO_GREEN_MIN, PRO_GREEN_MAX);
+            phaseDuration = randomDuration(cfg.proGreenMin, cfg.proGreenMax);
             digitalWrite(PRO_GREEN_LED_PIN, HIGH);
             digitalWrite(PRO_RED_LED_PIN,   LOW);
             Serial.print(F("[PROMODE] → GREEN phase (safe to move) "));  Serial.print(phaseDuration);  Serial.println(F("ms"));
+            if (sPhaseChangeCb) sPhaseChangeCb(true, phaseDuration);
         }
     }
 }

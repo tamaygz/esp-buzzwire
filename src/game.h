@@ -22,7 +22,17 @@ unsigned long gameGetElapsed();
 int          gameGetFailCount();
 
 // Returns a short human-readable name for the given state (e.g. "PLAYING").
-// Useful for Serial debug output and diagnostics.
 const char*  gameGetStateName(GameState s);
+
+// ── Event Callback ──────────────────────────────────────────────────────────
+// Registered function is called on every state transition.
+void gameOnStateChange(void (*cb)(GameState state, unsigned long elapsed, int fails));
+
+// ── Remote Control ───────────────────────────────────────────────────────────
+// Set flags consumed on the next gameLoop() tick. Safe to call from ISR/async context.
+void gameRemoteStart();
+void gameRemoteReset();
+void gameRemoteSimWire();
+void gameRemoteSimFinish();
 
 #endif // GAME_H

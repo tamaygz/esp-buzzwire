@@ -1,5 +1,6 @@
 #include "sensors.h"
 #include "config.h"
+#include "game_config.h"
 
 // ── Internal State ──────────────────────────────────────────────────────────
 static int  irBaseline = 0;         // Calibrated ADC baseline; 0 = uncalibrated
@@ -26,7 +27,7 @@ static bool debouncedRead(uint8_t pin, unsigned long &lastDebounce, bool &lastRa
     }
 
     // Confirm stable state only after quiet period
-    if ((now - lastDebounce) >= DEBOUNCE_MS) {
+    if ((now - lastDebounce) >= cfg.debounceMs) {
         return raw;
     }
     return false;   // Still within debounce window
@@ -80,7 +81,7 @@ void irCalibrate() {
 bool irIsMoving() {
     int current = analogRead(IR_PIN);
     int delta   = abs(current - irBaseline);
-    bool moving = (delta > IR_MOVE_THRESHOLD);
+    bool moving = (delta > cfg.irMoveThreshold);
     DEBUG_LOG_2("[IR] val=", current, " delta=", delta);
     return moving;
 }

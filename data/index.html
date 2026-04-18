@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Buzzwire – Game</title>
+<link rel="stylesheet" href="style.css">
+<script src="header.js"></script>
+<script src="ws.js"></script>
+</head>
+<body>
+<main>
+  <h2>Game Monitor</h2>
+
+  <div class="card-row">
+    <div class="card" style="text-align:center">
+      <div style="font-size:.75rem;color:var(--muted);margin-bottom:8px">STATE</div>
+      <span id="stateBadge" class="badge badge-idle">IDLE</span>
+    </div>
+    <div class="card" style="text-align:center">
+      <div style="font-size:.75rem;color:var(--muted);margin-bottom:8px">ELAPSED</div>
+      <span id="elapsedVal" class="mono" style="font-size:1.6rem;font-weight:700">0.0 s</span>
+    </div>
+    <div class="card" style="text-align:center">
+      <div style="font-size:.75rem;color:var(--muted);margin-bottom:8px">FAILS</div>
+      <span id="failsVal" class="mono" style="font-size:1.6rem;font-weight:700;color:var(--danger)">0</span>
+    </div>
+  </div>
+
+  <h3>Remote Control</h3>
+  <div class="gap">
+    <button class="btn btn-success" onclick="wsSend('start')">&#9654; Start</button>
+    <button class="btn btn-ghost"   onclick="wsSend('reset')">&#8635; Reset</button>
+    <button class="btn btn-warn btn-sm" onclick="wsSend('simWire')">Sim Wire</button>
+    <button class="btn btn-primary btn-sm" onclick="wsSend('simFinish')">Sim Finish</button>
+  </div>
+
+  <h3>Scoreboard</h3>
+  <div class="card" style="padding:0;overflow:hidden">
+    <table id="scoreTable">
+      <thead><tr><th>#</th><th>Time</th><th>Fails</th></tr></thead>
+      <tbody id="scoreBody"><tr><td colspan="3" class="muted" style="padding:12px">No scores yet</td></tr></tbody>
+    </table>
+  </div>
+  <button class="btn btn-danger btn-sm mt" onclick="clearScores()">Clear Scores</button>
+</main>
+
+<script>
+function stateBadgeClass(s) {
+  const m = { IDLE:'badge-idle', COUNTDOWN:'badge-countdown', PLAYING:'badge-playing', FAIL:'badge-fail', WIN:'badge-win' };
+  return m[s] || 'badge-idle';
+}
+
+wsOn('state', function(d) {
+  const b = document.getElementById('stateBadge');
+  b.className = 'badge ' + stateBadgeClass(d.state);
+  b.textContent = d.state;
+  document.getElementById('elapsedVal').textContent = (d.elapsed / 1000).toFixed(1) + ' s';
+  document.getElementById('failsVal').textContent   = d.fails;
+});
+
+wsOn('scores', function(d) {
+  const tb = document.getElementById('scoreBody');
+  if (!d.length) {
+    tb.innerHTML = '<tr><td colspan="3" class="muted" style="padding:12px">No scores yet</td></tr>';
+    return;
+  }
+  tb.innerHTML = d.map((e, i) =>
+    `<tr class="rank-${i+1}">
+       <td>${e.rank}</td>
+       <td>${e.timeSec.toFixed(2)} s</td>
+       <td>${e.fails}</td>
+     </tr>`
+  ).join('');
+});
+
+function clearScores() {
+  if (!confirm('Clear all scores?')) return;
+  fetch('/api/scores', { method: 'DELETE' })
+    .then(r => r.json())
+    .then(() => showToast('Scores cleared'))
+    .catch(() => showToast('Error', true));
+}
+</script>
+</body>
+</html>

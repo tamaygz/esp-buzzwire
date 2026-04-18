@@ -1,5 +1,7 @@
 #include "game.h"
 #include "config.h"
+#include "game_config.h"
+#include "scoreboard.h"
 #include "sensors.h"
 #include "leds.h"
 #include "matrix.h"
@@ -15,10 +17,28 @@ static int countdownStep        = 3;
 
 // ── Per-State One-Shot Flags ─────────────────────────────────────────────────
 // These are reset in enterState() and set the first time their action fires.
-static bool buzzerFired   = false;   // Ensures FAIL buzzer fires exactly once
-static char winMsg[32]    = {};      // WIN message built once in enterState(STATE_WIN)
-static char lastProLetter = '\0';    // Cached Pro Mode letter (G/R); '\0' = unset
-static int  lastElapsedSec = -1;     // Cached elapsed seconds for normal-mode matrix
+static bool buzzerFired   = false;
+static char winMsg[32]    = {};
+static char lastProLetter = '\0';
+static int  lastElapsedSec = -1;
+
+// ── State Change Callback ──────────────────────────────────────────────────
+static void (*sStateChangeCb)(GameState state, unsigned long elapsed, int fails) = nullptr;
+
+void gameOnStateChange(void (*cb)(GameState state, unsigned long elapsed, int fails)) {
+    sStateChangeCb = cb;
+}
+
+// ── Remote Control Flags ─────────────────────────────────────────────────
+static bool remoteStart         = false;
+static bool remoteReset         = false;
+static bool remoteSimWire       = false;
+static bool remoteSimFinish     = false;
+
+void gameRemoteStart()       { remoteStart      = true; }
+void gameRemoteReset()       { remoteReset      = true; }
+void gameRemoteSimWire()     { remoteSimWire    = true; }
+void gameRemoteSimFinish()   { remoteSimFinish  = true; }
 
 // ── State Name Helper ────────────────────────────────────────────────────────
 const char* gameGetStateName(GameState s) {
@@ -56,35 +76,35 @@ static void enterState(GameState newState) {
 
     currentState = newState;
     stateStart   = millis();
-    matrixScrollReset();   // Always start fresh on state entry
+    matrixScrollReset();
 
-    // Reset one-shot / cached state for the new state
     buzzerFired    = false;
     lastProLetter  = '\0';
     lastElapsedSec = -1;
 
-    // Build WIN message at entry so it is ready before the first loop tick.
-    // snprintf() runs exactly once per WIN state, not every loop tick.
     if (newState == STATE_WIN) {
         snprintf(winMsg, sizeof(winMsg), "WIN! %lus %df",
                  elapsed / 1000UL, failCount);
         Serial.print(F("[GAME] WIN message: "));
         Serial.println(winMsg);
+        scoreboardAdd(elapsed, failCount);
     }
 
-    // Turn off pro-mode LEDs when leaving PLAYING
     if (newState == STATE_FAIL || newState == STATE_WIN || newState == STATE_IDLE) {
         digitalWrite(PRO_RED_LED_PIN,   LOW);
         digitalWrite(PRO_GREEN_LED_PIN, LOW);
     }
+
+    if (sStateChangeCb) sStateChangeCb(newState, elapsed, failCount);
 }
 
 // ── IDLE State ──────────────────────────────────────────────────────────────
 static void handleIdle() {
     ledsIdle();
-    matrixScrollText("TOUCH START", CRGB::Cyan, SCROLL_IDLE_MS);
+    matrixScrollText("TOUCH START", CRGB::Cyan, cfg.scrollIdleMs);
 
-    if (isStartTouched()) {
+    if (remoteStart || isStartTouched()) {
+        remoteStart   = false;
         failCount     = 0;
         elapsed       = 0;
         countdownStep = 3;
@@ -112,7 +132,7 @@ static void handleCountdown() {
             countdownStep = 0;
             Serial.println(F("[GAME] GO!"));
         }
-        matrixScrollText("GO!", CRGB::Green, SCROLL_COUNTDOWN_MS);
+        matrixScrollText("GO!", CRGB::Green, cfg.scrollCountdownMs);
         ledsCountdown(0);
     } else {
         // Countdown complete → PLAYING
@@ -137,7 +157,15 @@ static void handlePlaying() {
     elapsed = now - timerStart;
 
     // Wire contact → FAIL
-    if (isWireTouched()) {
+    if (remoteReset) {
+        remoteReset = false;
+        ledsClear();
+        enterState(STATE_IDLE);
+        return;
+    }
+
+    if (remoteSimWire || isWireTouched()) {
+        remoteSimWire = false;
         failCount++;
         Serial.print(F("[GAME] Wire touched — FAIL #"));
         Serial.println(failCount);
@@ -146,7 +174,8 @@ static void handlePlaying() {
     }
 
     // Finish pad → WIN
-    if (isFinishTouched()) {
+    if (remoteSimFinish || isFinishTouched()) {
+        remoteSimFinish = false;
         Serial.print(F("[GAME] Finish touched — WIN! time="));
         Serial.print(elapsed / 1000UL);
         Serial.print(F("s fails="));
@@ -221,14 +250,14 @@ static void handleFail() {
 
     // Sequence: "FAIL" scroll → fail-count digit → "GO BACK" scroll
     if (dt < FAIL_DISPLAY_MS / 2) {
-        matrixScrollText("FAIL", CRGB::Red, SCROLL_FAIL_MS);
-    } else if (dt < (FAIL_DISPLAY_MS * 3) / 4) {
+        matrixScrollText("FAIL", CRGB::Red, cfg.scrollFailMs);
+    } else if (dt < (cfg.failDisplayMs * 3) / 4) {
         matrixShowNumber(failCount, CRGB::Orange);
     } else {
-        matrixScrollText("GO BACK", CRGB::Orange, SCROLL_FAIL_MS);
+        matrixScrollText("GO BACK", CRGB::Orange, cfg.scrollFailMs);
     }
 
-    if (dt >= (unsigned long)FAIL_DISPLAY_MS) {
+    if (dt >= cfg.failDisplayMs) {
         digitalWrite(BUZZER_PIN, LOW);
         ledsClear();
         timerStart = 0;
@@ -252,9 +281,9 @@ static void handleWin() {
     ledsWin();
 
     // winMsg was formatted once in enterState(STATE_WIN); just scroll it here.
-    matrixScrollText(winMsg, CRGB::Green, SCROLL_WIN_MS);
+    matrixScrollText(winMsg, CRGB::Green, cfg.scrollWinMs);
 
-    if (dt >= (unsigned long)WIN_DISPLAY_MS) {
+    if (dt >= cfg.winDisplayMs) {
         ledsClear();
         enterState(STATE_IDLE);
     }

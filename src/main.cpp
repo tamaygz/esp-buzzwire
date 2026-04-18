@@ -7,7 +7,12 @@
 // To enable verbose sensor/LED debug output set DEBUG_LOGGING=1 in config.h.
 
 #include <Arduino.h>
+#include <LittleFS.h>
 #include "config.h"
+#include "game_config.h"
+#include "scoreboard.h"
+#include "wifi_manager.h"
+#include "webserver.h"
 #include "sensors.h"
 #include "leds.h"
 #include "matrix.h"
@@ -49,10 +54,31 @@ void setup() {
 #endif
 
     gameSetup();
+
+    // Register WebSocket push callbacks
+    gameOnStateChange([](GameState state, unsigned long, int) {
+        wsBroadcastState();
+        if (state == STATE_WIN) wsBroadcastScores();
+    });
+    promodeOnPhaseChange([](bool, unsigned long) { wsBroadcastState(); });
+
+    if (!LittleFS.begin()) {
+        Serial.println(F("[FS] LittleFS mount failed — web UI unavailable"));
+    }
+
+    configInit();
+    configLoad();
+
+    scoreboardInit();
+    wifiManagerSetup();
+    webServerSetup();
+
     Serial.println(F("[INIT] Ready — touch the START pad to begin!"));
 }
 
 // ── Loop ────────────────────────────────────────────────────────────────────
 void loop() {
+    wifiManagerLoop();
+    webServerLoop();
     gameLoop();
 }
