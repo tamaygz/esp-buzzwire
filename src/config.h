@@ -3,6 +3,12 @@
 
 #include <Arduino.h>
 
+// ── Firmware Version ─────────────────────────────────────────────────────────
+#define FW_VERSION  "1.1.0"
+#define FW_VERSION_TEXT       FW_VERSION
+#define FW_VERSION_PRINT()    Serial.print(F(FW_VERSION))
+#define FW_VERSION_PRINTLN()  Serial.println(F(FW_VERSION))
+
 // ── Debug Logging ────────────────────────────────────────────────────────────
 // Set to 1 to enable verbose sensor/LED/promode debug output on Serial.
 // Leave at 0 for production builds (saves RAM and CPU time).
@@ -55,10 +61,10 @@
 
 #define PRO_MODE_SENSOR    SENSOR_IR   // 0=IR, 1=PIR, 2=BOTH
 
-#define PRO_GREEN_MIN      2000     // ms min green phase
-#define PRO_GREEN_MAX      10000     // ms max green phase
-#define PRO_RED_MIN        1500     // ms min red phase
-#define PRO_RED_MAX        4000     // ms max red phase
+#define PRO_GREEN_MIN      3000     // ms min green phase
+#define PRO_GREEN_MAX      20000     // ms max green phase
+#define PRO_RED_MIN        2000     // ms min red phase
+#define PRO_RED_MAX        5000     // ms max red phase
 
 #define IR_PIN             A0       // Only analog pin on ESP8266
 #define IR_MOVE_THRESHOLD  150      // ADC delta to register as movement

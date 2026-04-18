@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Buzzwire – Game</title>
+<link rel="stylesheet" href="style.css">
+<script src="header.js"></script>
+<script src="ws.js"></script>
+</head>
+<body>
+<main>
+  <h2>Game Monitor</h2>
+
+  <div class="card-row">
+    <div class="card" style="text-align:center">
+      <div style="font-size:.75rem;color:var(--muted);margin-bottom:8px">STATE</div>
+      <span id="stateBadge" class="badge badge-idle">IDLE</span>
+    </div>
+    <div class="card" style="text-align:center">
+      <div style="font-size:.75rem;color:var(--muted);margin-bottom:8px">ELAPSED</div>
+      <span id="elapsedVal" class="mono" style="font-size:1.6rem;font-weight:700">0.0 s</span>
+    </div>
+    <div class="card" style="text-align:center">
+      <div style="font-size:.75rem;color:var(--muted);margin-bottom:8px">FAILS</div>
+      <span id="failsVal" class="mono" style="font-size:1.6rem;font-weight:700;color:var(--danger)">0</span>
+    </div>
+  </div>
+
+  <h3>Remote Control</h3>
+  <div class="gap">
+    <button class="btn btn-success" onclick="armAudio(); wsSend('start')">&#9654; Start</button>
+    <button class="btn btn-ghost"   onclick="wsSend('reset')">&#8635; Reset</button>
+    <button class="btn btn-warn btn-sm" onclick="wsSend('simWire')">Sim Wire</button>
+    <button class="btn btn-primary btn-sm" onclick="wsSend('simFinish')">Sim Finish</button>
+  </div>
+
+  <h3>Scoreboard</h3>
+  <div class="card" style="padding:0;overflow:hidden">
+    <table id="scoreTable">
+      <thead><tr><th>#</th><th>Time</th><th>Fails</th></tr></thead>
+      <tbody id="scoreBody"><tr><td colspan="3" class="muted" style="padding:12px">No scores yet</td></tr></tbody>
+    </table>
+  </div>
+  <button class="btn btn-danger btn-sm mt" onclick="clearScores()">Clear Scores</button>
+</main>
+
+<script>
+// ── Sound engine ───────────────────────────────────────────────────────────
+// Two-tier approach designed for iOS Safari / Chrome (WKWebView):
+//
+// Tier 1 — Web Audio API (preferred):
+//   Sounds are fetched as ArrayBuffers and decoded into AudioBuffers.
+//   Each play() creates a fresh AudioBufferSourceNode, so there is no
+//   "ended-state re-seek" bug and no src-change activation loss.
+//
+// Tier 2 — HTMLAudioElement fallback (CORS-blocked URLs):
+//   new Audio(url).play() — works on iOS 13+ when the AudioContext is in
+//   "running" state, which grants async audio permission page-wide.
+//
+// The AudioContext is created and resumed ONCE, synchronously in a user-gesture
+// handler.  All subsequent playSlot() calls from WebSocket events work without
+// any further gesture.
+
+const audioBuffers = {};  // slot → AudioBuffer (decoded) | null (CORS fail)
+const soundUrls    = {};  // slot → URL string
+let   audioCtx     = null;
+let   audioArmed   = false;
+// lastState persists across WS reconnects; null means "no state seen yet"
+// — prevents the initial WS snapshot from triggering a sound.
+let lastState = null;
+
+function armAudio() {
+  if (audioArmed) return;
+  audioArmed = true;
+  const Ctor = window.AudioContext || window.webkitAudioContext;
+  if (!Ctor) return;
+  audioCtx = new Ctor();
+  audioCtx.resume().catch(() => {});
+  // Decode any sound URLs that arrived before the first gesture.
+  Object.entries(soundUrls).forEach(([slot, url]) => decodeSlot(slot, url));
+}
+
+function decodeSlot(slot, url) {
+  if (!audioCtx || !url || audioBuffers.hasOwnProperty(slot)) return;
+  fetch(url, { mode: 'cors' })
+    .then(r => r.arrayBuffer())
+    .then(ab => audioCtx.decodeAudioData(ab))
+    .then(buf => { audioBuffers[slot] = buf; })
+    .catch(() => { audioBuffers[slot] = null; }); // null → HTMLAudio fallback
+}
+
+function playSlot(slot) {
+  if (!audioArmed) return;
+  // Tier 1: Web Audio buffer available — fire-and-forget source node.
+  if (audioCtx && audioBuffers[slot] instanceof AudioBuffer) {
+    const src = audioCtx.createBufferSource();
+    src.buffer = audioBuffers[slot];
+    src.connect(audioCtx.destination);
+    src.start(0);
+    return;
+  }
+  // Tier 2: CORS-blocked or still loading — new element per play.
+  // On iOS 13+ a running AudioContext grants async play() permission page-wide.
+  const url = soundUrls[slot];
+  if (url) new Audio(url).play().catch(() => {});
+}
+
+fetch('/api/sounds').then(r => r.json()).then(s => {
+  Object.entries(s).forEach(([slot, url]) => {
+    const u = (url || '').trim();
+    if (!u) return;
+    soundUrls[slot] = u;
+    if (audioCtx) decodeSlot(slot, u);
+  });
+}).catch(() => {});
+
+document.addEventListener('touchstart', armAudio, { passive: true });
+document.addEventListener('pointerdown', armAudio);
+document.addEventListener('keydown', armAudio);
+
+function stateBadgeClass(s) {
+  const m = { IDLE:'badge-idle', COUNTDOWN:'badge-countdown', PLAYING:'badge-playing', FAIL:'badge-fail', WIN:'badge-win' };
+  return m[s] || 'badge-idle';
+}
+
+const STATE_SOUND = { COUNTDOWN: 'countdown', PLAYING: 'start', FAIL: 'fail', WIN: 'win' };
+
+wsOn('state', function(d) {
+  const b = document.getElementById('stateBadge');
+  b.className = 'badge ' + stateBadgeClass(d.state);
+  b.textContent = d.state;
+  document.getElementById('elapsedVal').textContent = (d.elapsed / 1000).toFixed(1) + ' s';
+  document.getElementById('failsVal').textContent   = d.fails;
+
+  // lastState === null means this is the first snapshot from the WS connection
+  // (we may have joined mid-game), so skip playing a sound for it.
+  if (lastState !== null && d.state !== lastState) {
+    const slot = STATE_SOUND[d.state];
+    if (slot) playSlot(slot);
+  }
+  lastState = d.state;
+});
+
+wsOn('phase', function(d) {
+  playSlot(d.phase === 'GREEN' ? 'proGreen' : 'proRed');
+});
+
+wsOn('scores', function(d) {
+  const tb = document.getElementById('scoreBody');
+  if (!d.length) {
+    tb.innerHTML = '<tr><td colspan="3" class="muted" style="padding:12px">No scores yet</td></tr>';
+    return;
+  }
+  tb.innerHTML = d.map((e, i) =>
+    `<tr class="rank-${i+1}">
+       <td>${e.rank}</td>
+       <td>${e.timeSec.toFixed(2)} s</td>
+       <td>${e.fails}</td>
+     </tr>`
+  ).join('');
+});
+
+function clearScores() {
+  if (!confirm('Clear all scores?')) return;
+  fetch('/api/scores', { method: 'DELETE' })
+    .then(r => r.json())
+    .then(() => showToast('Scores cleared'))
+    .catch(() => showToast('Error', true));
+}
+</script>
+</body>
+</html>

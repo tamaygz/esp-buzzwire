@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Buzzwire – System</title>
+<link rel="stylesheet" href="style.css">
+<script src="header.js"></script>
+<script src="ws.js"></script>
+</head>
+<body>
+<main>
+  <h2>System</h2>
+
+  <h3>Device Info</h3>
+  <div class="card">
+    <table>
+      <tbody id="infoTable">
+        <tr><td class="muted">Free heap</td><td id="freeHeap" class="mono">–</td></tr>
+        <tr><td class="muted">Uptime</td><td id="uptime" class="mono">–</td></tr>
+        <tr><td class="muted">WS clients</td><td id="wsClients" class="mono">–</td></tr>
+        <tr><td class="muted">IP address</td><td id="sysIp" class="mono">–</td></tr>
+        <tr><td class="muted">Mode</td><td id="sysMode" class="mono">–</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>Actions</h3>
+  <div class="gap">
+    <button class="btn btn-warn" onclick="reboot()">&#9673; Reboot</button>
+    <button class="btn btn-danger" onclick="formatFs()">&#128465; Format Filesystem</button>
+  </div>
+  <p class="muted mt" style="font-size:.8rem">
+    Format wipes all saved config, scores, and sounds.
+  </p>
+</main>
+
+<script>
+function updateSys(d) {
+  document.getElementById('freeHeap').textContent  = d.freeHeap + ' bytes';
+  const s = d.uptime;
+  const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
+  document.getElementById('uptime').textContent    = `${h}h ${m}m ${sec}s`;
+  document.getElementById('wsClients').textContent = d.wsClients;
+  document.getElementById('sysIp').textContent     = d.ip;
+  document.getElementById('sysMode').textContent   = d.apMode ? 'Access Point' : 'Station (' + d.ssid + ')';
+}
+
+fetch('/api/sysinfo').then(r => r.json()).then(updateSys).catch(() => {});
+wsOn('sysinfo', updateSys);
+
+function reboot() {
+  if (!confirm('Reboot the device?')) return;
+  fetch('/api/system/reboot', { method: 'POST' })
+    .then(() => showToast('Rebooting…'));
+}
+
+function formatFs() {
+  if (!confirm('This will ERASE all saved data and reboot. Continue?')) return;
+  fetch('/api/system/format', { method: 'POST' })
+    .then(() => showToast('Formatting — rebooting…'));
+}
+</script>
+</body>
+</html>

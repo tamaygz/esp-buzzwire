@@ -1,5 +1,6 @@
 #include "leds.h"
 #include "config.h"
+#include "game_config.h"
 #include <FastLED.h>
 
 // ── Strip Array & Controller ────────────────────────────────────────────────
@@ -19,7 +20,7 @@ static unsigned long strobeTimer = 0;
 void ledsSetup() {
     gStripCtrl = &FastLED.addLeds<WS2812B, STRIP_PIN, GRB>(stripLeds, STRIP_NUM_LEDS);
     fill_solid(stripLeds, STRIP_NUM_LEDS, CRGB::Black);
-    gStripCtrl->showLeds(STRIP_BRIGHTNESS);
+    gStripCtrl->showLeds(cfg.stripBrightness);
     Serial.println(F("[LEDS] Setup complete"));
 }
 
@@ -45,7 +46,7 @@ void ledsIdle() {
 
     fill_rainbow(stripLeds, STRIP_NUM_LEDS, hueOffset, 7);
     hueOffset++;
-    gStripCtrl->showLeds(STRIP_BRIGHTNESS);
+    gStripCtrl->showLeds(cfg.stripBrightness);
 }
 
 // ── Countdown: Progressive Fill ─────────────────────────────────────────────
@@ -64,7 +65,7 @@ void ledsCountdown(int step) {
 
     fill_solid(stripLeds, STRIP_NUM_LEDS, CRGB::Black);
     fill_solid(stripLeds, fillCount, color);
-    gStripCtrl->showLeds(STRIP_BRIGHTNESS);
+    gStripCtrl->showLeds(cfg.stripBrightness);
 }
 
 // ── Playing: Slow Green Breathing Pulse (BPM=20) ────────────────────────────
@@ -85,11 +86,11 @@ void ledsFail() {
         strobeOn    = true;
         strobeCount = 1;
         fill_solid(stripLeds, STRIP_NUM_LEDS, CRGB::Red);
-        gStripCtrl->showLeds(STRIP_BRIGHTNESS);
+        gStripCtrl->showLeds(cfg.stripBrightness);
         return;
     }
 
-    if (now - strobeTimer < STROBE_INTERVAL_MS) return;
+    if (now - strobeTimer < cfg.strobeIntervalMs) return;
     strobeTimer = now;
 
     if (strobeOn) {
@@ -98,14 +99,14 @@ void ledsFail() {
         strobeOn = false;
     } else {
         // Turn on next flash if quota not reached
-        if (strobeCount < STROBE_FLASH_COUNT) {
+        if (strobeCount < cfg.strobeFlashCount) {
             fill_solid(stripLeds, STRIP_NUM_LEDS, CRGB::Red);
             strobeOn = true;
             strobeCount++;
         }
         // After all flashes, strip stays dark until ledsClear() is called
     }
-    gStripCtrl->showLeds(STRIP_BRIGHTNESS);
+    gStripCtrl->showLeds(cfg.stripBrightness);
 }
 
 // ── Win: Confetti / Sparkle ─────────────────────────────────────────────────
@@ -117,7 +118,7 @@ void ledsWin() {
     fadeToBlackBy(stripLeds, STRIP_NUM_LEDS, 20);
     int pos = random16(STRIP_NUM_LEDS);
     stripLeds[pos] += CHSV(random8(), 200, 255);
-    gStripCtrl->showLeds(STRIP_BRIGHTNESS);
+    gStripCtrl->showLeds(cfg.stripBrightness);
 }
 
 // ── Pro Mode: Fast Green Pulse (BPM=60) ──────────────────────────────────────
@@ -134,13 +135,13 @@ void ledsProRed() {
     if (now - lastUpdate < PLAY_UPDATE_MS) return;
     lastUpdate = now;
     fill_solid(stripLeds, STRIP_NUM_LEDS, CRGB::Red);
-    gStripCtrl->showLeds(STRIP_BRIGHTNESS);
+    gStripCtrl->showLeds(cfg.stripBrightness);
 }
 
 // ── Clear: All Off, Reset Strobe State ──────────────────────────────────────
 void ledsClear() {
     fill_solid(stripLeds, STRIP_NUM_LEDS, CRGB::Black);
-    gStripCtrl->showLeds(STRIP_BRIGHTNESS);
+    gStripCtrl->showLeds(cfg.stripBrightness);
     strobeCount = 0;
     strobeOn    = false;
     DEBUG_LOGLN("[LEDS] Cleared");

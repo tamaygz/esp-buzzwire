@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Buzzwire – WiFi</title>
+<link rel="stylesheet" href="style.css">
+<script src="header.js"></script>
+<script src="ws.js"></script>
+</head>
+<body>
+<main>
+  <h2>WiFi Settings</h2>
+
+  <div class="card" id="wifiStatus">
+    <div style="display:flex;gap:12px;align-items:center">
+      <span class="dot on" id="staStatus"></span>
+      <span id="staLabel" class="muted">Loading…</span>
+    </div>
+    <p id="staIp" class="mono" style="margin-top:8px;font-size:.9rem"></p>
+  </div>
+
+  <div class="card mt">
+    <p>To connect to a different network, reset the saved credentials. The device will reboot and open the <strong>Buzzwire-Game</strong> configuration portal.</p>
+    <div class="gap mt">
+      <button id="btnReset" class="btn btn-danger">Reset WiFi &amp; Open Portal</button>
+    </div>
+  </div>
+</main>
+
+<script>
+fetch('/api/sysinfo').then(r => r.json()).then(updateStatus).catch(() => {});
+
+wsOn('sysinfo', updateStatus);
+
+function updateStatus(d) {
+  document.getElementById('staLabel').textContent = 'Connected to: ' + d.ssid;
+  document.getElementById('staIp').textContent    = 'IP: ' + d.ip + '   RSSI: ' + d.rssi + ' dBm';
+}
+
+document.getElementById('btnReset').addEventListener('click', function() {
+  if (!confirm('This will erase saved WiFi credentials and reboot. Continue?')) return;
+  fetch('/api/wifi/reset', { method: 'POST' })
+    .then(() => showToast('Credentials cleared — rebooting into config portal…'))
+    .catch(() => showToast('Request failed', true));
+});
+</script>
+</body>
+</html>

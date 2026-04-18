@@ -1,5 +1,6 @@
 #include "matrix.h"
 #include "config.h"
+#include "game_config.h"
 #include <FastLED.h>
 
 // ── Matrix LED Array ────────────────────────────────────────────────────────
@@ -237,7 +238,7 @@ void matrixSetup() {
 // ── Clear ───────────────────────────────────────────────────────────────────
 void matrixClear() {
     fill_solid(matrixLeds, MATRIX_NUM_LEDS, CRGB::Black);
-    gMatrixCtrl->showLeds(MATRIX_BRIGHTNESS);
+    gMatrixCtrl->showLeds(cfg.matrixBrightness);
 }
 
 // ── Scroll Reset ─────────────────────────────────────────────────────────────
@@ -276,7 +277,7 @@ void matrixDrawChar(int x, int y, char c, CRGB color) {
 void matrixShowLetter(char c, CRGB color) {
     fill_solid(matrixLeds, MATRIX_NUM_LEDS, CRGB::Black);
     matrixDrawChar(0, 0, c, color);
-    gMatrixCtrl->showLeds(MATRIX_BRIGHTNESS);
+    gMatrixCtrl->showLeds(cfg.matrixBrightness);
 }
 
 // ── Show a Number (1–2 digits, clamped to 0–99) ─────────────────────────────
@@ -295,7 +296,7 @@ void matrixShowNumber(int n, CRGB color) {
         matrixDrawChar( 4, 0, '0' + (n % 10), color);
     }
 
-    gMatrixCtrl->showLeds(MATRIX_BRIGHTNESS);
+    gMatrixCtrl->showLeds(cfg.matrixBrightness);
 }
 
 // ── Non-Blocking Scrolling Text ─────────────────────────────────────────────
@@ -327,7 +328,7 @@ void matrixScrollText(const char* text, CRGB color, int delayMs) {
         }
     }
 
-    gMatrixCtrl->showLeds(MATRIX_BRIGHTNESS);
+    gMatrixCtrl->showLeds(cfg.matrixBrightness);
 
     scrollOffset--;
     // Wrap: restart from right edge once the last character exits the left

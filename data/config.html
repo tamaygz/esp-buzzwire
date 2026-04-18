@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Buzzwire – Config</title>
+<link rel="stylesheet" href="style.css">
+<script src="header.js"></script>
+<script src="ws.js"></script>
+</head>
+<body>
+<main>
+  <h2>Game Configuration</h2>
+
+  <form id="cfgForm">
+    <h3>Pro Mode</h3>
+    <div class="card">
+      <div class="field">
+        <label><input type="checkbox" id="proModeEnabled"> Enable Pro Mode</label>
+      </div>
+      <div class="field">
+        <label for="proModeSensor">Motion sensor</label>
+        <select id="proModeSensor">
+          <option value="0">IR (TCRT5000)</option>
+          <option value="1">PIR (HC-SR501)</option>
+          <option value="2">Both</option>
+        </select>
+      </div>
+      <div class="field-row">
+        <div class="field">
+          <label>Green phase min (ms)</label>
+          <input type="number" id="proGreenMin" min="500" max="30000">
+        </div>
+        <div class="field">
+          <label>Green phase max (ms)</label>
+          <input type="number" id="proGreenMax" min="500" max="30000">
+        </div>
+      </div>
+      <div class="field-row">
+        <div class="field">
+          <label>Red phase min (ms)</label>
+          <input type="number" id="proRedMin" min="500" max="30000">
+        </div>
+        <div class="field">
+          <label>Red phase max (ms)</label>
+          <input type="number" id="proRedMax" min="500" max="30000">
+        </div>
+      </div>
+      <div class="field">
+        <label>IR move threshold (ADC delta)</label>
+        <input type="number" id="irMoveThreshold" min="10" max="1023">
+      </div>
+    </div>
+
+    <h3>LED</h3>
+    <div class="card">
+      <div class="field-row">
+        <div class="field">
+          <label>Strip brightness (0–255)</label>
+          <input type="number" id="stripBrightness" min="0" max="255">
+        </div>
+        <div class="field">
+          <label>Matrix brightness (0–255)</label>
+          <input type="number" id="matrixBrightness" min="0" max="255">
+        </div>
+      </div>
+      <div class="field-row">
+        <div class="field">
+          <label>Strobe interval (ms)</label>
+          <input type="number" id="strobeIntervalMs" min="10" max="2000">
+        </div>
+        <div class="field">
+          <label>Strobe flash count</label>
+          <input type="number" id="strobeFlashCount" min="1" max="20">
+        </div>
+      </div>
+    </div>
+
+    <h3>Timing</h3>
+    <div class="card">
+      <div class="field-row">
+        <div class="field">
+          <label>Fail display (ms)</label>
+          <input type="number" id="failDisplayMs" min="500" max="10000">
+        </div>
+        <div class="field">
+          <label>Win display (ms)</label>
+          <input type="number" id="winDisplayMs" min="500" max="30000">
+        </div>
+      </div>
+      <div class="field-row">
+        <div class="field">
+          <label>Countdown step (ms)</label>
+          <input type="number" id="countdownStepMs" min="200" max="3000">
+        </div>
+        <div class="field">
+          <label>Debounce (ms)</label>
+          <input type="number" id="debounceMs" min="5" max="500">
+        </div>
+      </div>
+    </div>
+
+    <h3>Matrix Scroll Speed (ms per tick)</h3>
+    <div class="card">
+      <div class="field-row">
+        <div class="field">
+          <label>Idle</label>
+          <input type="number" id="scrollIdleMs" min="10" max="500">
+        </div>
+        <div class="field">
+          <label>Countdown</label>
+          <input type="number" id="scrollCountdownMs" min="10" max="500">
+        </div>
+      </div>
+      <div class="field-row">
+        <div class="field">
+          <label>Fail</label>
+          <input type="number" id="scrollFailMs" min="10" max="500">
+        </div>
+        <div class="field">
+          <label>Win</label>
+          <input type="number" id="scrollWinMs" min="10" max="500">
+        </div>
+      </div>
+    </div>
+
+    <div class="gap mt">
+      <button type="submit" class="btn btn-primary">Save</button>
+      <button type="button" class="btn btn-ghost" onclick="resetCfg()">Reset to Defaults</button>
+    </div>
+  </form>
+</main>
+
+<script>
+const fields = [
+  'proGreenMin','proGreenMax','proRedMin','proRedMax',
+  'irMoveThreshold','debounceMs','stripBrightness','matrixBrightness',
+  'failDisplayMs','winDisplayMs','countdownStepMs',
+  'strobeIntervalMs','strobeFlashCount',
+  'scrollIdleMs','scrollCountdownMs','scrollFailMs','scrollWinMs'
+];
+
+function populate(cfg) {
+  document.getElementById('proModeEnabled').checked = cfg.proModeEnabled;
+  document.getElementById('proModeSensor').value = cfg.proModeSensor ?? 0;
+  fields.forEach(f => {
+    const el = document.getElementById(f);
+    if (el) el.value = cfg[f] ?? '';
+  });
+}
+
+wsOn('config', populate);
+
+// Load on page open
+fetch('/api/config').then(r => r.json()).then(populate);
+
+document.getElementById('cfgForm').addEventListener('submit', function(e) {
+  e.preventDefault();
+  const body = {
+    proModeEnabled: document.getElementById('proModeEnabled').checked,
+    proModeSensor:  Number(document.getElementById('proModeSensor').value),
+  };
+  fields.forEach(f => {
+    const el = document.getElementById(f);
+    if (el) body[f] = Number(el.value);
+  });
+  fetch('/api/config', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) })
+    .then(r => r.json())
+    .then(() => showToast('Config saved'))
+    .catch(() => showToast('Save failed', true));
+});
+
+function resetCfg() {
+  if (!confirm('Reset all config to firmware defaults?')) return;
+  fetch('/api/config/reset', { method: 'POST' })
+    .then(r => r.json())
+    .then(populate)
+    .then(() => showToast('Config reset'));
+}
+</script>
+</body>
+</html>
