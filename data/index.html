@@ -46,60 +46,74 @@
 </main>
 
 <script>
-// ── Sound pool ─────────────────────────────────────────────────────────────
-// One Audio element per slot with a fixed src.
-// iOS blocks .play() after src changes on the same element, so we never
-// reassign src once a URL is loaded.  Each element is "primed" (muted
-// play+pause) inside a user-gesture handler so iOS marks it as activated,
-// after which subsequent .play() calls succeed without a new gesture.
-const SOUND_SLOTS = ['start', 'countdown', 'fail', 'win', 'proGreen', 'proRed'];
-const sfxPool = {};
-SOUND_SLOTS.forEach(slot => { sfxPool[slot] = new Audio(); });
+// ── Sound engine ───────────────────────────────────────────────────────────
+// Two-tier approach designed for iOS Safari / Chrome (WKWebView):
+//
+// Tier 1 — Web Audio API (preferred):
+//   Sounds are fetched as ArrayBuffers and decoded into AudioBuffers.
+//   Each play() creates a fresh AudioBufferSourceNode, so there is no
+//   "ended-state re-seek" bug and no src-change activation loss.
+//
+// Tier 2 — HTMLAudioElement fallback (CORS-blocked URLs):
+//   new Audio(url).play() — works on iOS 13+ when the AudioContext is in
+//   "running" state, which grants async audio permission page-wide.
+//
+// The AudioContext is created and resumed ONCE, synchronously in a user-gesture
+// handler.  All subsequent playSlot() calls from WebSocket events work without
+// any further gesture.
 
-let sounds = {};
-let audioArmed = false;
+const audioBuffers = {};  // slot → AudioBuffer (decoded) | null (CORS fail)
+const soundUrls    = {};  // slot → URL string
+let   audioCtx     = null;
+let   audioArmed   = false;
 // lastState persists across WS reconnects; null means "no state seen yet"
-// – prevents the initial WS snapshot from triggering a sound.
+// — prevents the initial WS snapshot from triggering a sound.
 let lastState = null;
-
-function loadSoundsIntoPool(s) {
-  sounds = s;
-  SOUND_SLOTS.forEach(slot => {
-    const url = (s[slot] || '').trim();
-    if (!url) return;
-    const el = sfxPool[slot];
-    const abs = new URL(url, location.href).href;
-    if (el.src !== abs) { el.src = url; el.load(); }
-    if (audioArmed) primeSlot(el);
-  });
-}
-
-function primeSlot(el) {
-  if (!el.src || el.src === location.href) return;
-  const prev = el.muted;
-  el.muted = true;
-  el.play().then(() => {
-    el.pause();
-    el.currentTime = 0;
-    el.muted = prev;
-  }).catch(() => { el.muted = prev; });
-}
 
 function armAudio() {
   if (audioArmed) return;
   audioArmed = true;
-  SOUND_SLOTS.forEach(slot => primeSlot(sfxPool[slot]));
+  const Ctor = window.AudioContext || window.webkitAudioContext;
+  if (!Ctor) return;
+  audioCtx = new Ctor();
+  audioCtx.resume().catch(() => {});
+  // Decode any sound URLs that arrived before the first gesture.
+  Object.entries(soundUrls).forEach(([slot, url]) => decodeSlot(slot, url));
+}
+
+function decodeSlot(slot, url) {
+  if (!audioCtx || !url || audioBuffers.hasOwnProperty(slot)) return;
+  fetch(url, { mode: 'cors' })
+    .then(r => r.arrayBuffer())
+    .then(ab => audioCtx.decodeAudioData(ab))
+    .then(buf => { audioBuffers[slot] = buf; })
+    .catch(() => { audioBuffers[slot] = null; }); // null → HTMLAudio fallback
 }
 
 function playSlot(slot) {
   if (!audioArmed) return;
-  const el = sfxPool[slot];
-  if (!el || !el.src || el.src === location.href) return;
-  el.currentTime = 0;
-  el.play().catch(() => {});
+  // Tier 1: Web Audio buffer available — fire-and-forget source node.
+  if (audioCtx && audioBuffers[slot] instanceof AudioBuffer) {
+    const src = audioCtx.createBufferSource();
+    src.buffer = audioBuffers[slot];
+    src.connect(audioCtx.destination);
+    src.start(0);
+    return;
+  }
+  // Tier 2: CORS-blocked or still loading — new element per play.
+  // On iOS 13+ a running AudioContext grants async play() permission page-wide.
+  const url = soundUrls[slot];
+  if (url) new Audio(url).play().catch(() => {});
 }
 
-fetch('/api/sounds').then(r => r.json()).then(loadSoundsIntoPool).catch(() => {});
+fetch('/api/sounds').then(r => r.json()).then(s => {
+  Object.entries(s).forEach(([slot, url]) => {
+    const u = (url || '').trim();
+    if (!u) return;
+    soundUrls[slot] = u;
+    if (audioCtx) decodeSlot(slot, u);
+  });
+}).catch(() => {});
 
 document.addEventListener('touchstart', armAudio, { passive: true });
 document.addEventListener('pointerdown', armAudio);

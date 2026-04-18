@@ -88,11 +88,17 @@ function testSound() {
   new Audio(url).play().catch(() => showToast('Playback blocked by browser', true));
 }
 
-// Play sounds when WS state events arrive
+// Play sounds when WS state events arrive.
+// Guard against the initial WS snapshot and the periodic state=PLAYING
+// broadcasts (sent every 250 ms during gameplay) replaying the start sound.
+let lastSoundsState = null;
 wsOn('state', function(d) {
   const map = { COUNTDOWN: sounds.countdown, PLAYING: sounds.start, FAIL: sounds.fail, WIN: sounds.win };
-  const url = map[d.state];
-  if (url) new Audio(url).play().catch(() => {});
+  if (lastSoundsState !== null && d.state !== lastSoundsState) {
+    const url = map[d.state];
+    if (url) new Audio(url).play().catch(() => {});
+  }
+  lastSoundsState = d.state;
 });
 
 // Play pro mode phase sounds
