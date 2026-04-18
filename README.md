@@ -82,10 +82,10 @@ D3 (GPIO0)  → 8×8 Matrix DIN
 D2 (GPIO4)  → Buzzwire contact
 D1 (GPIO5)  → Start pad
 D6 (GPIO12) → Finish pad
-D5 (GPIO14) → Buzzer
+D5 (GPIO14) → Red LED (Pro Mode)
 D7 (GPIO13) → PIR sensor
 A0          → IR sensor
-D8 (GPIO15) → Red LED (Pro Mode)
+D8 (GPIO15) → Buzzer
 D0 (GPIO16) → Green LED (Pro Mode)
 ────────────────────────────────────
 ```

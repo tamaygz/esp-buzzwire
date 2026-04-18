@@ -47,6 +47,12 @@ static void enterState(GameState newState) {
     currentState = newState;
     stateStart   = millis();
     matrixScrollReset();   // Always start fresh on state entry
+
+    // Turn off pro-mode LEDs when leaving PLAYING
+    if (newState == STATE_FAIL || newState == STATE_WIN || newState == STATE_IDLE) {
+        digitalWrite(PRO_RED_LED_PIN,   LOW);
+        digitalWrite(PRO_GREEN_LED_PIN, LOW);
+    }
 }
 
 // ── IDLE State ──────────────────────────────────────────────────────────────

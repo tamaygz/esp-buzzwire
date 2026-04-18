@@ -13,10 +13,10 @@ Complete wiring reference for the ESP Buzzwire Game. Read [docs/hardware.md](har
 | D2 | GPIO4 | Buzzwire Contact | → Game wire (other end of wire to GND via ring) |
 | D1 | GPIO5 | Start Pad | → Metal start pad (pad also wired to GND) |
 | D6 | GPIO12 | Finish Pad | → Metal finish pad (pad also wired to GND) |
-| D5 | GPIO14 | Buzzer | → Active buzzer (+) terminal |
+| D5 | GPIO14 | Red LED (Pro Mode) | → 330 Ω → Red LED anode → GND |
 | D7 | GPIO13 | PIR Sensor | → PIR module digital OUT |
 | A0 | A0 | IR Sensor | → IR sensor analog OUT |
-| D8 | GPIO15 | Red LED (Pro Mode) | → 330 Ω → Red LED anode → GND |
+| D8 | GPIO15 | Buzzer | → Active buzzer (+) terminal |
 | D0 | GPIO16 | Green LED (Pro Mode) | → 330 Ω → Green LED anode → GND |
 | 5V / VIN | — | Power In | → PSU 5 V + |
 | GND | — | Common Ground | → PSU GND, all component GNDs |
@@ -43,13 +43,13 @@ Complete wiring reference for the ESP Buzzwire Game. Read [docs/hardware.md](har
                          │                           │
    Finish Pad ──────────►│ D6 (GPIO12) INPUT_PULLUP  │
                          │                           │
-   Buzzer (+) ◄─────────│ D5 (GPIO14)               │
+   Buzzer (+) ◄─────────│ D8 (GPIO15)               │
                          │                           │
    PIR Sensor OUT ──────►│ D7 (GPIO13)               │
                          │                           │
    IR Sensor OUT ───────►│ A0                        │
                          │                           │
-   Red LED ◄────────────│ D8 (GPIO15) → 330Ω → LED  │
+   Red LED ◄────────────│ D5 (GPIO14) → 330Ω → LED  │
                          │                           │
    Green LED ◄──────────│ D0 (GPIO16) → 330Ω → LED  │
                          └──────────────────────────┘
@@ -189,7 +189,7 @@ Each pad is a **bare metal surface** connected to **GND**. The corresponding GPI
 
 - [ ] All GNDs connected together (PSU, ESP, strip, matrix, sensors, ring handle)
 - [ ] 330 Ω resistors on LED data lines (D4, D3) close to the first LED
-- [ ] 330 Ω resistors on discrete LED anodes (D8, D0)
+- [ ] 330 Ω resistors on discrete LED anodes (D5, D0)
 - [ ] 100 µF capacitors across LED strip and matrix power inputs
 - [ ] Game wire connected to D2 (GPIO4)
 - [ ] Start pad connected to D1 (GPIO5), pad surface to GND
@@ -197,4 +197,4 @@ Each pad is a **bare metal surface** connected to **GND**. The corresponding GPI
 - [ ] Ring handle wire connected to GND
 - [ ] IR sensor analog out → A0
 - [ ] PIR sensor digital out → D7 (GPIO13)
-- [ ] Buzzer (+) → D5 (GPIO14), (−) → GND
+- [ ] Buzzer (+) → D8 (GPIO15), (−) → GND
