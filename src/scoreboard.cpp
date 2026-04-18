@@ -8,10 +8,13 @@ static int        sCount = 0;
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 static void sortScores() {
-    // Sort ascending by time (faster = better rank)
+    // Sort ascending by time (faster = better rank), then by timestamp so ties
+    // have a deterministic order.
     for (int i = 0; i < sCount - 1; i++) {
         for (int j = i + 1; j < sCount; j++) {
-            if (sScores[j].timeMs < sScores[i].timeMs) {
+            if (sScores[j].timeMs < sScores[i].timeMs ||
+                (sScores[j].timeMs == sScores[i].timeMs &&
+                 sScores[j].timestamp < sScores[i].timestamp)) {
                 ScoreEntry tmp = sScores[i];
                 sScores[i]     = sScores[j];
                 sScores[j]     = tmp;
