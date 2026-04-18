@@ -6,16 +6,15 @@
 #include "game.h"
 #include "scoreboard.h"
 #include "wifi_manager.h"
-#include "promode.h"
 
 static AsyncWebServer  sServer(80);
 static AsyncWebSocket  sWs("/ws");
 
 // ── Deferred action flags ─────────────────────────────────────────────────────
-// Handlers run in the network interrupt context — blocking calls (delay, LittleFS.format,
-// ESP.restart) must be deferred to webServerLoop() which runs in the main loop context.
+// Reboot/format operations are deferred to webServerLoop() to keep handlers short.
 enum PendingAction { PA_NONE, PA_REBOOT, PA_WIFI_RESET, PA_FORMAT };
-static PendingAction sPendingAction = PA_NONE;
+static volatile uint8_t sPendingAction = PA_NONE;
+static unsigned long    sLastSysInfoBroadcast = 0;
 
 // ── JSON Builders ─────────────────────────────────────────────────────────────
 static String buildStateJson() {
@@ -87,6 +86,7 @@ static String buildSysJson() {
     doc["uptime"]     = millis() / 1000UL;
     doc["ssid"]       = wifiGetSSID();
     doc["ip"]         = wifiGetIP();
+    doc["apMode"]     = wifiGetApMode();
     doc["rssi"]       = WiFi.RSSI();
     doc["wsClients"]  = sWs.count();
     String out;
@@ -96,13 +96,13 @@ static String buildSysJson() {
 
 // ── WebSocket broadcasts ──────────────────────────────────────────────────────
 static String wrapEvent(const char* event, const String& data) {
-    JsonDocument doc;
-    doc["event"] = event;
-    JsonDocument payload;
-    deserializeJson(payload, data);
-    doc["data"]  = payload;
     String out;
-    serializeJson(doc, out);
+    out.reserve(strlen(event) + data.length() + 24);
+    out = F("{\"event\":\"");
+    out += event;
+    out += F("\",\"data\":");
+    out += data;
+    out += '}';
     return out;
 }
 
@@ -142,55 +142,168 @@ static void sendJson(AsyncWebServerRequest* req, int code, const String& body) {
     req->send(code, "application/json", body);
 }
 
-// Apply a JSON body to cfg fields (only keys present are updated)
-static bool applyConfigJson(const String& body) {
-    JsonDocument doc;
-    if (deserializeJson(doc, body) != DeserializationError::Ok) return false;
-    cfg.proModeEnabled    = doc["proModeEnabled"]    | cfg.proModeEnabled;
-    cfg.proModeSensor     = doc["proModeSensor"]     | cfg.proModeSensor;
-    cfg.proGreenMin       = doc["proGreenMin"]       | cfg.proGreenMin;
-    cfg.proGreenMax       = doc["proGreenMax"]       | cfg.proGreenMax;
-    cfg.proRedMin         = doc["proRedMin"]         | cfg.proRedMin;
-    cfg.proRedMax         = doc["proRedMax"]         | cfg.proRedMax;
-    cfg.irMoveThreshold   = doc["irMoveThreshold"]   | cfg.irMoveThreshold;
-    cfg.debounceMs        = doc["debounceMs"]        | cfg.debounceMs;
-    cfg.stripBrightness   = doc["stripBrightness"]   | cfg.stripBrightness;
-    cfg.matrixBrightness  = doc["matrixBrightness"]  | cfg.matrixBrightness;
-    cfg.failDisplayMs     = doc["failDisplayMs"]     | cfg.failDisplayMs;
-    cfg.winDisplayMs      = doc["winDisplayMs"]      | cfg.winDisplayMs;
-    cfg.countdownStepMs   = doc["countdownStepMs"]   | cfg.countdownStepMs;
-    cfg.strobeIntervalMs  = doc["strobeIntervalMs"]  | cfg.strobeIntervalMs;
-    cfg.strobeFlashCount  = doc["strobeFlashCount"]  | cfg.strobeFlashCount;
-    cfg.scrollIdleMs      = doc["scrollIdleMs"]      | cfg.scrollIdleMs;
-    cfg.scrollCountdownMs = doc["scrollCountdownMs"] | cfg.scrollCountdownMs;
-    cfg.scrollFailMs      = doc["scrollFailMs"]      | cfg.scrollFailMs;
-    cfg.scrollWinMs       = doc["scrollWinMs"]       | cfg.scrollWinMs;
+static bool applyConfigValidation(const GameConfig& in, String& error) {
+    if (in.proModeSensor > SENSOR_BOTH) { error = "invalid proModeSensor"; return false; }
+    if (in.proGreenMin == 0 || in.proGreenMax == 0 || in.proGreenMin > in.proGreenMax) {
+        error = "invalid proGreen range";
+        return false;
+    }
+    if (in.proRedMin == 0 || in.proRedMax == 0 || in.proRedMin > in.proRedMax) {
+        error = "invalid proRed range";
+        return false;
+    }
+    if (in.irMoveThreshold > 1023) { error = "invalid irMoveThreshold"; return false; }
+    if (in.countdownStepMs == 0) { error = "countdownStepMs must be > 0"; return false; }
+    if (in.failDisplayMs == 0 || in.winDisplayMs == 0) { error = "display durations must be > 0"; return false; }
+    if (in.strobeIntervalMs == 0) { error = "strobeIntervalMs must be > 0"; return false; }
+    if (in.strobeFlashCount == 0) { error = "strobeFlashCount must be > 0"; return false; }
+    if (in.scrollIdleMs == 0 || in.scrollCountdownMs == 0 || in.scrollFailMs == 0 || in.scrollWinMs == 0) {
+        error = "scroll timings must be > 0";
+        return false;
+    }
     return true;
 }
 
-// ── Body accumulator for POST requests ───────────────────────────────────────
-// ESPAsyncWebServer delivers body in chunks; we accumulate in a static String.
-// This is safe for single-client REST usage on an ESP8266.
-struct BodyRequest {
-    AsyncWebServerRequest* req;
-    String                 body;
+// Apply a JSON body to cfg fields (only keys present are updated)
+static bool applyConfigJson(const String& body, String& error) {
+    JsonDocument doc;
+    if (deserializeJson(doc, body) != DeserializationError::Ok) { error = "bad JSON"; return false; }
+
+    GameConfig next = cfg;
+    next.proModeEnabled    = doc["proModeEnabled"] | next.proModeEnabled;
+
+    if (!doc["proModeSensor"].isNull()) {
+        int v = doc["proModeSensor"].as<int>();
+        if (v < SENSOR_IR || v > SENSOR_BOTH) { error = "invalid proModeSensor"; return false; }
+        next.proModeSensor = (uint8_t)v;
+    }
+    if (!doc["proGreenMin"].isNull()) {
+        long v = doc["proGreenMin"].as<long>();
+        if (v <= 0) { error = "invalid proGreenMin"; return false; }
+        next.proGreenMin = (uint32_t)v;
+    }
+    if (!doc["proGreenMax"].isNull()) {
+        long v = doc["proGreenMax"].as<long>();
+        if (v <= 0) { error = "invalid proGreenMax"; return false; }
+        next.proGreenMax = (uint32_t)v;
+    }
+    if (!doc["proRedMin"].isNull()) {
+        long v = doc["proRedMin"].as<long>();
+        if (v <= 0) { error = "invalid proRedMin"; return false; }
+        next.proRedMin = (uint32_t)v;
+    }
+    if (!doc["proRedMax"].isNull()) {
+        long v = doc["proRedMax"].as<long>();
+        if (v <= 0) { error = "invalid proRedMax"; return false; }
+        next.proRedMax = (uint32_t)v;
+    }
+    if (!doc["irMoveThreshold"].isNull()) {
+        int v = doc["irMoveThreshold"].as<int>();
+        if (v < 0 || v > 1023) { error = "invalid irMoveThreshold"; return false; }
+        next.irMoveThreshold = (uint16_t)v;
+    }
+    if (!doc["debounceMs"].isNull()) {
+        long v = doc["debounceMs"].as<long>();
+        if (v < 0) { error = "invalid debounceMs"; return false; }
+        next.debounceMs = (uint32_t)v;
+    }
+    if (!doc["stripBrightness"].isNull()) {
+        int v = doc["stripBrightness"].as<int>();
+        if (v < 0 || v > 255) { error = "invalid stripBrightness"; return false; }
+        next.stripBrightness = (uint8_t)v;
+    }
+    if (!doc["matrixBrightness"].isNull()) {
+        int v = doc["matrixBrightness"].as<int>();
+        if (v < 0 || v > 255) { error = "invalid matrixBrightness"; return false; }
+        next.matrixBrightness = (uint8_t)v;
+    }
+    if (!doc["failDisplayMs"].isNull()) {
+        long v = doc["failDisplayMs"].as<long>();
+        if (v <= 0) { error = "invalid failDisplayMs"; return false; }
+        next.failDisplayMs = (uint32_t)v;
+    }
+    if (!doc["winDisplayMs"].isNull()) {
+        long v = doc["winDisplayMs"].as<long>();
+        if (v <= 0) { error = "invalid winDisplayMs"; return false; }
+        next.winDisplayMs = (uint32_t)v;
+    }
+    if (!doc["countdownStepMs"].isNull()) {
+        long v = doc["countdownStepMs"].as<long>();
+        if (v <= 0) { error = "invalid countdownStepMs"; return false; }
+        next.countdownStepMs = (uint32_t)v;
+    }
+    if (!doc["strobeIntervalMs"].isNull()) {
+        long v = doc["strobeIntervalMs"].as<long>();
+        if (v <= 0) { error = "invalid strobeIntervalMs"; return false; }
+        next.strobeIntervalMs = (uint32_t)v;
+    }
+    if (!doc["strobeFlashCount"].isNull()) {
+        int v = doc["strobeFlashCount"].as<int>();
+        if (v <= 0 || v > 255) { error = "invalid strobeFlashCount"; return false; }
+        next.strobeFlashCount = (uint8_t)v;
+    }
+    if (!doc["scrollIdleMs"].isNull()) {
+        long v = doc["scrollIdleMs"].as<long>();
+        if (v <= 0) { error = "invalid scrollIdleMs"; return false; }
+        next.scrollIdleMs = (uint32_t)v;
+    }
+    if (!doc["scrollCountdownMs"].isNull()) {
+        long v = doc["scrollCountdownMs"].as<long>();
+        if (v <= 0) { error = "invalid scrollCountdownMs"; return false; }
+        next.scrollCountdownMs = (uint32_t)v;
+    }
+    if (!doc["scrollFailMs"].isNull()) {
+        long v = doc["scrollFailMs"].as<long>();
+        if (v <= 0) { error = "invalid scrollFailMs"; return false; }
+        next.scrollFailMs = (uint32_t)v;
+    }
+    if (!doc["scrollWinMs"].isNull()) {
+        long v = doc["scrollWinMs"].as<long>();
+        if (v <= 0) { error = "invalid scrollWinMs"; return false; }
+        next.scrollWinMs = (uint32_t)v;
+    }
+    if (!applyConfigValidation(next, error)) return false;
+    cfg = next;
+    return true;
+}
+
+// ── Body accumulator for POST requests ────────────────────────────────────────
+struct BodyState {
+    String body;
+    bool   rejected = false;
 };
-static BodyRequest sPending = { nullptr, "" };
 
 static constexpr size_t MAX_BODY_BYTES = 2048;
 
+static BodyState* ensureBodyState(AsyncWebServerRequest* req) {
+    BodyState* state = reinterpret_cast<BodyState*>(req->_tempObject);
+    if (state == nullptr) {
+        state = new BodyState();
+        req->_tempObject = state;
+    }
+    return state;
+}
+
+static BodyState* takeBodyState(AsyncWebServerRequest* req) {
+    BodyState* state = reinterpret_cast<BodyState*>(req->_tempObject);
+    req->_tempObject = nullptr;
+    return state;
+}
+
 static void collectBody(AsyncWebServerRequest* req,
                         uint8_t* data, size_t len, size_t index, size_t total) {
+    BodyState* state = ensureBodyState(req);
+    if (state == nullptr || state->rejected) return;
     if (total > MAX_BODY_BYTES) {
+        state->rejected = true;
         req->send(413, "application/json", "{\"error\":\"payload too large\"}");
         return;
     }
     if (index == 0) {
-        sPending.req  = req;
-        sPending.body = "";
-        sPending.body.reserve(total);
+        state->body = "";
+        state->body.reserve(total);
     }
-    sPending.body.concat((char*)data, len);
+    state->body.concat((char*)data, len);
 }
 
 // ── Route registration ────────────────────────────────────────────────────────
@@ -225,10 +338,19 @@ void webServerSetup() {
     // --- POST /api/config  (body: partial JSON) ---
     sServer.on("/api/config", HTTP_POST,
         [](AsyncWebServerRequest* req) {
-            if (!applyConfigJson(sPending.body)) {
-                sendJson(req, 400, "{\"error\":\"bad JSON\"}");
+            BodyState* bodyState = takeBodyState(req);
+            if (bodyState == nullptr) {
+                sendJson(req, 400, "{\"error\":\"missing body\"}");
                 return;
             }
+            if (bodyState->rejected) { delete bodyState; return; }
+            String err;
+            if (!applyConfigJson(bodyState->body, err)) {
+                delete bodyState;
+                sendJson(req, 400, String("{\"error\":\"") + err + "\"}");
+                return;
+            }
+            delete bodyState;
             configSave();
             wsBroadcastConfig();
             sendJson(req, 200, buildConfigJson());
@@ -259,11 +381,19 @@ void webServerSetup() {
     // --- POST /api/sounds  (body: {"win":"url","fail":"url","start":"url","countdown":"url"}) ---
     sServer.on("/api/sounds", HTTP_POST,
         [](AsyncWebServerRequest* req) {
+            BodyState* bodyState = takeBodyState(req);
+            if (bodyState == nullptr) {
+                sendJson(req, 400, "{\"error\":\"missing body\"}");
+                return;
+            }
+            if (bodyState->rejected) { delete bodyState; return; }
             JsonDocument doc;
-            if (deserializeJson(doc, sPending.body) != DeserializationError::Ok) {
+            if (deserializeJson(doc, bodyState->body) != DeserializationError::Ok) {
+                delete bodyState;
                 sendJson(req, 400, "{\"error\":\"bad JSON\"}");
                 return;
             }
+            delete bodyState;
             File f = LittleFS.open("/sounds.json", "w");
             if (!f) { sendJson(req, 500, "{\"error\":\"fs write failed\"}"); return; }
             serializeJson(doc, f);
@@ -311,9 +441,14 @@ void webServerSetup() {
 
 void webServerLoop() {
     sWs.cleanupClients();
+    unsigned long now = millis();
+    if (now - sLastSysInfoBroadcast >= 3000UL) {
+        sLastSysInfoBroadcast = now;
+        wsBroadcastSysInfo();
+    }
     // Execute deferred actions here — safe in main loop context, not interrupt context
     if (sPendingAction != PA_NONE) {
-        PendingAction action = sPendingAction;
+        PendingAction action = (PendingAction)sPendingAction;
         sPendingAction = PA_NONE;
         if (action == PA_REBOOT)     { delay(100); ESP.restart(); }
         if (action == PA_WIFI_RESET) { wifiReset(); }

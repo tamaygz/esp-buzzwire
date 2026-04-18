@@ -10,7 +10,11 @@ static WiFiManager sWm;
 // If no credentials are saved (or connection fails), opens a captive-portal AP.
 // Reboots automatically on portal timeout to avoid hanging in an unknown state.
 bool wifiManagerSetup() {
+#if DEBUG_LOGGING
     sWm.setDebugOutput(true);
+#else
+    sWm.setDebugOutput(false);
+#endif
     sWm.setConfigPortalTimeout(WIFI_PORTAL_TIMEOUT_S);
 
     // Pass password only when one is configured (must be ≥ 8 chars per spec)

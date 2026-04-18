@@ -10,7 +10,7 @@ void promodeSetup();
 void promodeUpdate();              // Call every loop tick during PLAYING; updates phase timer + discrete LEDs
 bool promodeIsGreen();
 bool promodeIsRed();
-bool promodeMovementDetected();    // Checks sensor(s) per PRO_MODE_SENSOR config
+bool promodeMovementDetected();    // Checks sensor(s) per cfg.proModeSensor runtime config
 void promodeReset();               // Reset phase timer (call on game start)
 
 // ── Event Callback ──────────────────────────────────────────────────────────

@@ -81,15 +81,10 @@ bool promodeIsRed() {
 }
 
 // ── Movement Detection ──────────────────────────────────────────────────────
-// Dispatches to the sensor(s) selected by PRO_MODE_SENSOR at compile time.
+// Dispatches to the sensor(s) selected in runtime config.
 bool promodeMovementDetected() {
-#if PRO_MODE_SENSOR == SENSOR_IR
-    return irIsMoving();
-#elif PRO_MODE_SENSOR == SENSOR_PIR
-    return pirIsMoving();
-#elif PRO_MODE_SENSOR == SENSOR_BOTH
-    return irIsMoving() || pirIsMoving();
-#else
+    if (cfg.proModeSensor == SENSOR_IR) return irIsMoving();
+    if (cfg.proModeSensor == SENSOR_PIR) return pirIsMoving();
+    if (cfg.proModeSensor == SENSOR_BOTH) return irIsMoving() || pirIsMoving();
     return false;
-#endif
 }

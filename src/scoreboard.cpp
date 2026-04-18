@@ -69,7 +69,8 @@ void scoreboardAdd(unsigned long elapsedMs, int failCount) {
         sScores[sCount] = { elapsedMs, failCount, millis() };
         sCount++;
     } else {
-        // Replace worst (last after sort = slowest time)
+        // Replace worst only when new entry is better (lower time)
+        if (elapsedMs >= sScores[sCount - 1].timeMs) return;
         sScores[sCount - 1] = { elapsedMs, failCount, millis() };
     }
     sortScores();

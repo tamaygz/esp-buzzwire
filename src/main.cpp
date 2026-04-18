@@ -31,23 +31,28 @@ void setup() {
     pinMode(BUZZER_PIN, OUTPUT);
     digitalWrite(BUZZER_PIN, LOW);
 
+    bool fsReady = LittleFS.begin();
+    if (!fsReady) {
+        Serial.println(F("[FS] LittleFS mount failed — web UI unavailable"));
+    }
+
+    configInit();
+    if (fsReady) configLoad();
+
     sensorsSetup();
     ledsSetup();
     matrixSetup();
-
-#if PRO_MODE_ENABLED
     promodeSetup();
-    Serial.print(F("[INIT] Pro Mode: ENABLED  sensor="));
-  #if   PRO_MODE_SENSOR == SENSOR_IR
-    Serial.println(F("IR"));
-  #elif PRO_MODE_SENSOR == SENSOR_PIR
-    Serial.println(F("PIR"));
-  #elif PRO_MODE_SENSOR == SENSOR_BOTH
-    Serial.println(F("IR+PIR"));
-  #endif
-#else
-    Serial.println(F("[INIT] Pro Mode: DISABLED"));
-#endif
+
+    if (cfg.proModeEnabled) {
+        Serial.print(F("[INIT] Pro Mode: ENABLED  sensor="));
+        if (cfg.proModeSensor == SENSOR_IR) Serial.println(F("IR"));
+        else if (cfg.proModeSensor == SENSOR_PIR) Serial.println(F("PIR"));
+        else if (cfg.proModeSensor == SENSOR_BOTH) Serial.println(F("IR+PIR"));
+        else Serial.println(F("UNKNOWN"));
+    } else {
+        Serial.println(F("[INIT] Pro Mode: DISABLED"));
+    }
 
 #if DEBUG_LOGGING
     Serial.println(F("[INIT] Debug logging: ON"));
@@ -62,16 +67,11 @@ void setup() {
     });
     promodeOnPhaseChange([](bool, unsigned long) { wsBroadcastState(); });
 
-    if (!LittleFS.begin()) {
-        Serial.println(F("[FS] LittleFS mount failed — web UI unavailable"));
-    }
-
-    configInit();
-    configLoad();
-
-    scoreboardInit();
+    if (fsReady) scoreboardInit();
+    else Serial.println(F("[SCORES] LittleFS unavailable — persistence disabled"));
     wifiManagerSetup();
-    webServerSetup();
+    if (fsReady) webServerSetup();
+    else Serial.println(F("[WEB] LittleFS unavailable — web server not started"));
 
     Serial.println(F("[INIT] Ready — touch the START pad to begin!"));
 }

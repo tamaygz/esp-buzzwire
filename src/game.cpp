@@ -30,10 +30,10 @@ void gameOnStateChange(void (*cb)(GameState state, unsigned long elapsed, int fa
 }
 
 // ── Remote Control Flags ─────────────────────────────────────────────────
-static bool remoteStart         = false;
-static bool remoteReset         = false;
-static bool remoteSimWire       = false;
-static bool remoteSimFinish     = false;
+static volatile bool remoteStart         = false;
+static volatile bool remoteReset         = false;
+static volatile bool remoteSimWire       = false;
+static volatile bool remoteSimFinish     = false;
 
 void gameRemoteStart()       { remoteStart      = true; }
 void gameRemoteReset()       { remoteReset      = true; }
@@ -115,8 +115,9 @@ static void handleIdle() {
 
 // ── COUNTDOWN State ─────────────────────────────────────────────────────────
 static void handleCountdown() {
-    unsigned long now      = millis();
-    int           stepIndex = (int)((now - stateStart) / COUNTDOWN_STEP_MS);
+    unsigned long now   = millis();
+    unsigned long stepMs = cfg.countdownStepMs > 0 ? cfg.countdownStepMs : 1UL;
+    int           stepIndex = (int)((now - stateStart) / stepMs);
 
     if (stepIndex < 3) {
         int digit = 3 - stepIndex;
@@ -139,13 +140,13 @@ static void handleCountdown() {
         timerStart = millis();
         ledsClear();
 
-#if PRO_MODE_ENABLED
-        // Only calibrate IR when it is actually used (avoids ~64ms delay for PIR-only builds)
-  #if (PRO_MODE_SENSOR == SENSOR_IR) || (PRO_MODE_SENSOR == SENSOR_BOTH)
-        irCalibrate();
-  #endif
-        promodeReset();
-#endif
+        if (cfg.proModeEnabled) {
+            // Only calibrate IR when it is actually used (avoids ~64ms delay for PIR-only mode)
+            if (cfg.proModeSensor == SENSOR_IR || cfg.proModeSensor == SENSOR_BOTH) {
+                irCalibrate();
+            }
+            promodeReset();
+        }
 
         enterState(STATE_PLAYING);
     }
@@ -184,24 +185,23 @@ static void handlePlaying() {
         return;
     }
 
-#if PRO_MODE_ENABLED
-    // Pro Mode: advance phase timer and update discrete indicator LEDs
-    promodeUpdate();
+    if (cfg.proModeEnabled) {
+        // Pro Mode: advance phase timer and update discrete indicator LEDs
+        promodeUpdate();
 
-    // Movement during RED phase → FAIL
-    if (promodeIsRed() && promodeMovementDetected()) {
-        failCount++;
-        Serial.print(F("[GAME] Pro Mode movement during RED — FAIL #"));
-        Serial.println(failCount);
-        enterState(STATE_FAIL);
-        return;
-    }
+        // Movement during RED phase → FAIL
+        if (promodeIsRed() && promodeMovementDetected()) {
+            failCount++;
+            Serial.print(F("[GAME] Pro Mode movement during RED — FAIL #"));
+            Serial.println(failCount);
+            enterState(STATE_FAIL);
+            return;
+        }
 
-    // Matrix: only redraw when the phase changes (G ↔ R) to avoid redundant
-    // FastLED.show() calls every loop tick.
-    // LED strip effects are called every tick (self-throttled via PLAY_UPDATE_MS)
-    // so the smooth beatsin8 breathing animation continues uninterrupted.
-    {
+        // Matrix: only redraw when the phase changes (G ↔ R) to avoid redundant
+        // FastLED.show() calls every loop tick.
+        // LED strip effects are called every tick (self-throttled via PLAY_UPDATE_MS)
+        // so the smooth beatsin8 breathing animation continues uninterrupted.
         char newLetter = promodeIsGreen() ? 'G' : 'R';
         if (newLetter != lastProLetter) {
             lastProLetter = newLetter;
@@ -216,18 +216,15 @@ static void handlePlaying() {
         } else {
             ledsProRed();
         }
-    }
-#else
-    // Normal mode: update matrix only when the displayed second changes
-    {
+    } else {
+        // Normal mode: update matrix only when the displayed second changes
         int sec = (int)(elapsed / 1000);
         if (sec != lastElapsedSec) {
             lastElapsedSec = sec;
             matrixShowNumber(sec, CRGB::White);
         }
+        ledsPlaying();
     }
-    ledsPlaying();
-#endif
 
     DEBUG_LOG_VAL("[GAME] elapsed=", elapsed);
 }
@@ -249,7 +246,7 @@ static void handleFail() {
     ledsFail();
 
     // Sequence: "FAIL" scroll → fail-count digit → "GO BACK" scroll
-    if (dt < FAIL_DISPLAY_MS / 2) {
+    if (dt < cfg.failDisplayMs / 2) {
         matrixScrollText("FAIL", CRGB::Red, cfg.scrollFailMs);
     } else if (dt < (cfg.failDisplayMs * 3) / 4) {
         matrixShowNumber(failCount, CRGB::Orange);

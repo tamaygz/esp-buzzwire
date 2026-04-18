@@ -3,7 +3,7 @@
 
 #include <Arduino.h>
 
-#define WS_MAX_CLIENTS 4
+#define WS_MAX_CLIENTS 2
 
 void webServerSetup();
 void webServerLoop();   // Flush queued WebSocket text messages
