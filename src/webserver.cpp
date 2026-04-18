@@ -523,7 +523,7 @@ void webServerLoop() {
             wsBroadcastState();
         }
     } else {
-        sLastStateBroadcast = now;
+        sLastStateBroadcast = 0;
     }
     if (now - sLastSysInfoBroadcast >= 3000UL) {
         sLastSysInfoBroadcast = now;
