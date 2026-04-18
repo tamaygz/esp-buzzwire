@@ -71,6 +71,12 @@ static void enterState(GameState newState) {
         Serial.print(F("[GAME] WIN message: "));
         Serial.println(winMsg);
     }
+
+    // Turn off pro-mode LEDs when leaving PLAYING
+    if (newState == STATE_FAIL || newState == STATE_WIN || newState == STATE_IDLE) {
+        digitalWrite(PRO_RED_LED_PIN,   LOW);
+        digitalWrite(PRO_GREEN_LED_PIN, LOW);
+    }
 }
 
 // ── IDLE State ──────────────────────────────────────────────────────────────

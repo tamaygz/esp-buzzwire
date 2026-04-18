@@ -43,7 +43,7 @@
 #define WIRE_PIN           4        // D2 / GPIO4  — buzzwire contact
 #define START_PIN          5        // D1 / GPIO5  — start pad
 #define FINISH_PIN         12       // D6 / GPIO12 — finish pad
-#define BUZZER_PIN         14       // D5 / GPIO14 — active buzzer
+#define BUZZER_PIN         15       // D8 / GPIO15 — active buzzer
 
 // ── Pro Mode ────────────────────────────────────────────────────────────────
 #define PRO_MODE_ENABLED   1        // 1 = enabled, 0 = disabled
@@ -55,8 +55,10 @@
 
 #define PRO_MODE_SENSOR    SENSOR_IR   // 0=IR, 1=PIR, 2=BOTH
 
-#define PRO_GREEN_DURATION 3000     // ms player may move freely
-#define PRO_RED_DURATION   2000     // ms player must stay still
+#define PRO_GREEN_MIN      2000     // ms min green phase
+#define PRO_GREEN_MAX      10000     // ms max green phase
+#define PRO_RED_MIN        1500     // ms min red phase
+#define PRO_RED_MAX        4000     // ms max red phase
 
 #define IR_PIN             A0       // Only analog pin on ESP8266
 #define IR_MOVE_THRESHOLD  150      // ADC delta to register as movement
@@ -65,7 +67,7 @@
 #define PIR_PIN            13       // D7 / GPIO13
 
 // ── Pro Mode Traffic Light LEDs ─────────────────────────────────────────────
-#define PRO_RED_LED_PIN    15       // D8 / GPIO15
+#define PRO_RED_LED_PIN    14       // D5 / GPIO14
 #define PRO_GREEN_LED_PIN  16       // D0 / GPIO16
 
 // ── Timing / Tuning ─────────────────────────────────────────────────────────

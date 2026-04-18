@@ -13,7 +13,7 @@ Pro Mode adds a **traffic-light challenge** to the buzzwire game: a red/green cy
 3. During RED, one or both sensors monitor for movement.
 4. If movement is detected during RED → **instant FAIL** — same as touching the wire (buzzer, red flash, timer reset, fail count incremented).
 5. The traffic light state is shown on:
-   - **Discrete LEDs**: red LED on D8, green LED on D0
+   - **Discrete LEDs**: red LED on D5, green LED on D0
    - **8×8 matrix**: large "R" (red) or "G" (green) letter
 
 ---
@@ -103,8 +103,10 @@ When disabled:
 ## Traffic Light Timing
 
 ```cpp
-#define PRO_GREEN_DURATION 3000     // ms — player may move
-#define PRO_RED_DURATION   2000     // ms — player must freeze
+#define PRO_GREEN_MIN      2000     // ms min — player may move
+#define PRO_GREEN_MAX      4000     // ms max — player may move
+#define PRO_RED_MIN        1500     // ms min — player must freeze
+#define PRO_RED_MAX        3000     // ms max — player must freeze
 ```
 
 ### Tuning Tips

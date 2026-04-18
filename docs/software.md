@@ -104,7 +104,7 @@ All **hardware input reading**.
 **Pro Mode** traffic light cycling and movement detection.
 - `promodeSetup()` — configures red/green LED pins (both initially LOW).
 - `promodeReset()` — resets the phase timer and starts in GREEN phase (call at game start).
-- `promodeUpdate()` — called every tick during PLAYING; cycles between GREEN and RED phases based on `PRO_GREEN_DURATION` / `PRO_RED_DURATION`. Logs phase transitions to Serial. Matrix display is fully owned by `game.cpp`.
+- `promodeUpdate()` — called every tick during PLAYING; cycles between GREEN and RED phases with randomized durations (configured via `PRO_GREEN_MIN`/`PRO_GREEN_MAX` and `PRO_RED_MIN`/`PRO_RED_MAX`). Logs phase transitions to Serial. Matrix display is fully owned by `game.cpp`.
 - `promodeIsGreen()` / `promodeIsRed()` — phase queries.
 - `promodeMovementDetected()` — checks the configured sensor(s) using `#if` preprocessor guards based on `PRO_MODE_SENSOR`.
 
@@ -197,7 +197,7 @@ Set `MATRIX_SERPENTINE` to `1` for zigzag-wired matrices (most common), `0` for 
 #define WIRE_PIN           4        // D2 / GPIO4
 #define START_PIN          5        // D1 / GPIO5
 #define FINISH_PIN         12       // D6 / GPIO12
-#define BUZZER_PIN         14       // D5 / GPIO14
+#define BUZZER_PIN         15       // D8 / GPIO15
 ```
 All sensor pins use `INPUT_PULLUP` — LOW means contact/touch.
 
@@ -208,8 +208,10 @@ All sensor pins use `INPUT_PULLUP` — LOW means contact/touch.
 #define SENSOR_PIR         1
 #define SENSOR_BOTH        2
 #define PRO_MODE_SENSOR    SENSOR_IR   // Choose sensor type
-#define PRO_GREEN_DURATION 3000     // Green phase duration (ms)
-#define PRO_RED_DURATION   2000     // Red phase duration (ms)
+#define PRO_GREEN_MIN      2000     // Green phase min duration (ms)
+#define PRO_GREEN_MAX      4000     // Green phase max duration (ms)
+#define PRO_RED_MIN        1500     // Red phase min duration (ms)
+#define PRO_RED_MAX        3000     // Red phase max duration (ms)
 #define IR_CALIBRATE_SAMPLES 32     // IR baseline averaging samples
 #define IR_MOVE_THRESHOLD  150      // ADC delta threshold
 ```

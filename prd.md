@@ -44,10 +44,10 @@ A modern, ESP8266-based buzzwire skill game with individually addressable RGB LE
 
 ### Audio
 - **Active buzzer:** Digital GPIO
-  - Pin: D5 (GPIO14) — configurable
+  - Pin: D8 (GPIO15) — configurable
 
 ### Pro Mode Traffic Light (optional discrete LEDs)
-- **Red LED** → GPIO with 330Ω resistor, Pin: D8 (GPIO15)
+- **Red LED** → GPIO with 330Ω resistor, Pin: D5 (GPIO14)
 - **Green LED** → GPIO with 330Ω resistor, Pin: D0 (GPIO16)
 
 ---
@@ -61,10 +61,10 @@ A modern, ESP8266-based buzzwire skill game with individually addressable RGB LE
 | Buzzwire contact      | D2          | GPIO4 | INPUT_PULLUP, LOW = contact  |
 | Start pad             | D1          | GPIO5 | INPUT_PULLUP, LOW = touched  |
 | Finish pad            | D6          | GPIO12| INPUT_PULLUP, LOW = touched  |
-| Buzzer                | D5          | GPIO14| Active buzzer                |
+| Buzzer                | D8          | GPIO15| Active buzzer                |
 | PIR sensor            | D7          | GPIO13| Digital HIGH = motion        |
 | IR proximity (analog) | A0          | A0    | Analog, delta detection      |
-| Red LED (Pro Mode)    | D8          | GPIO15| 330Ω resistor                |
+| Red LED (Pro Mode)    | D5          | GPIO14| 330Ω resistor                |
 | Green LED (Pro Mode)  | D0          | GPIO16| 330Ω resistor                |
 
 ---
@@ -157,8 +157,10 @@ Pro Mode adds a traffic-light challenge: a red/green LED cycle controls when the
 ```cpp
 #define PRO_MODE_ENABLED     true   // Master toggle
 #define PRO_MODE_SENSOR      IR     // IR, PIR, or BOTH
-#define PRO_GREEN_DURATION   3000   // ms player may move
-#define PRO_RED_DURATION     2000   // ms player must freeze
+#define PRO_GREEN_MIN        2000   // ms min player may move
+#define PRO_GREEN_MAX        4000   // ms max player may move
+#define PRO_RED_MIN          1500   // ms min player must freeze
+#define PRO_RED_MAX          3000   // ms max player must freeze
 #define IR_MOVE_THRESHOLD    150    // ADC delta to count as movement
 #define PIR_PIN              D7     // PIR digital input pin
 ```
@@ -241,19 +243,21 @@ All hardware pins, thresholds, and feature flags are centralised in `config.h`:
 #define WIRE_PIN           D2     // Buzzwire contact
 #define START_PIN          D1     // Start pad
 #define FINISH_PIN         D6     // Finish pad
-#define BUZZER_PIN         D5
+#define BUZZER_PIN         D8
 
 // ── Pro Mode ─────────────────────────────────────────
 #define PRO_MODE_ENABLED   true
 #define PRO_MODE_SENSOR    IR     // IR | PIR | BOTH
-#define PRO_GREEN_DURATION 3000
-#define PRO_RED_DURATION   2000
+#define PRO_GREEN_MIN      2000
+#define PRO_GREEN_MAX      4000
+#define PRO_RED_MIN        1500
+#define PRO_RED_MAX        3000
 #define IR_PIN             A0
 #define IR_MOVE_THRESHOLD  150
 #define PIR_PIN            D7
 
 // ── Pro Mode Traffic Light LEDs ──────────────────────
-#define PRO_RED_LED_PIN    D8
+#define PRO_RED_LED_PIN    D5
 #define PRO_GREEN_LED_PIN  D0
 
 // ── Tuning ───────────────────────────────────────────
@@ -278,9 +282,9 @@ ESP8266 NodeMCU / Wemos D1 Mini
     Buzzwire wire──►│ D2  (PULLUP) │◄─── wire → GND
     Start pad ─────►│ D1  (PULLUP) │◄─── pad → GND
     Finish pad ────►│ D6  (PULLUP) │◄─── pad → GND
-    Buzzer (+) ────►│ D5           │
+    Buzzer (+) ────►│ D8           │
     PIR OUT ───────►│ D7           │
-    Red LED (+) ───►│ D8           │──► 330Ω ──► LED ──► GND
+    Red LED (+) ───►│ D5           │──► 330Ω ──► LED ──► GND
     Green LED (+) ─►│ D0           │──► 330Ω ──► LED ──► GND
     IR sensor OUT ─►│ A0           │
                     └──────────────┘
