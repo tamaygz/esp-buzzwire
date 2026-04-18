@@ -16,6 +16,12 @@ enum PendingAction { PA_NONE, PA_REBOOT, PA_WIFI_RESET, PA_FORMAT };
 static volatile uint8_t sPendingAction = PA_NONE;
 static unsigned long    sLastSysInfoBroadcast = 0;
 
+static void setPendingAction(PendingAction action) {
+    noInterrupts();
+    sPendingAction = (uint8_t)action;
+    interrupts();
+}
+
 // ── JSON Builders ─────────────────────────────────────────────────────────────
 static String buildStateJson() {
     JsonDocument doc;
@@ -143,7 +149,10 @@ static void sendJson(AsyncWebServerRequest* req, int code, const String& body) {
 }
 
 static bool applyConfigValidation(const GameConfig& in, String& error) {
-    if (in.proModeSensor > SENSOR_BOTH) { error = "invalid proModeSensor"; return false; }
+    if (in.proModeSensor < SENSOR_IR || in.proModeSensor > SENSOR_BOTH) {
+        error = "invalid proModeSensor";
+        return false;
+    }
     if (in.proGreenMin == 0 || in.proGreenMax == 0 || in.proGreenMin > in.proGreenMax) {
         error = "invalid proGreen range";
         return false;
@@ -276,6 +285,7 @@ struct BodyState {
 static constexpr size_t MAX_BODY_BYTES = 2048;
 
 static BodyState* ensureBodyState(AsyncWebServerRequest* req) {
+    // ESPAsyncWebServer exposes _tempObject as request-scoped scratch storage.
     BodyState* state = reinterpret_cast<BodyState*>(req->_tempObject);
     if (state == nullptr) {
         state = new BodyState();
@@ -293,7 +303,11 @@ static BodyState* takeBodyState(AsyncWebServerRequest* req) {
 static void collectBody(AsyncWebServerRequest* req,
                         uint8_t* data, size_t len, size_t index, size_t total) {
     BodyState* state = ensureBodyState(req);
-    if (state == nullptr || state->rejected) return;
+    if (state == nullptr) {
+        req->send(500, "application/json", "{\"error\":\"body allocation failed\"}");
+        return;
+    }
+    if (state->rejected) return;
     if (total > MAX_BODY_BYTES) {
         state->rejected = true;
         req->send(413, "application/json", "{\"error\":\"payload too large\"}");
@@ -409,7 +423,7 @@ void webServerSetup() {
     // --- POST /api/wifi/reset  (forget saved credentials, reboot into config portal) ---
     sServer.on("/api/wifi/reset", HTTP_POST, [](AsyncWebServerRequest* req) {
         sendJson(req, 200, "{\"ok\":true,\"reboot\":true}");
-        sPendingAction = PA_WIFI_RESET;  // deferred: execute in webServerLoop()
+        setPendingAction(PA_WIFI_RESET);  // deferred: execute in webServerLoop()
     });
 
     // --- GET /api/sysinfo ---
@@ -420,13 +434,13 @@ void webServerSetup() {
     // --- POST /api/system/reboot ---
     sServer.on("/api/system/reboot", HTTP_POST, [](AsyncWebServerRequest* req) {
         sendJson(req, 200, "{\"ok\":true}");
-        sPendingAction = PA_REBOOT;  // deferred: execute in webServerLoop()
+        setPendingAction(PA_REBOOT);  // deferred: execute in webServerLoop()
     });
 
     // --- POST /api/system/format ---
     sServer.on("/api/system/format", HTTP_POST, [](AsyncWebServerRequest* req) {
         sendJson(req, 200, "{\"ok\":true}");
-        sPendingAction = PA_FORMAT;  // deferred: format + reboot in webServerLoop()
+        setPendingAction(PA_FORMAT);  // deferred: format + reboot in webServerLoop()
     });
 
     // --- Game control ---
@@ -447,11 +461,11 @@ void webServerLoop() {
         wsBroadcastSysInfo();
     }
     // Execute deferred actions here — safe in main loop context, not interrupt context
-    if (sPendingAction != PA_NONE) {
-        PendingAction action = (PendingAction)sPendingAction;
-        sPendingAction = PA_NONE;
-        if (action == PA_REBOOT)     { delay(100); ESP.restart(); }
-        if (action == PA_WIFI_RESET) { wifiReset(); }
-        if (action == PA_FORMAT)     { LittleFS.format(); delay(100); ESP.restart(); }
-    }
+    noInterrupts();
+    PendingAction action = (PendingAction)sPendingAction;
+    sPendingAction = PA_NONE;
+    interrupts();
+    if (action == PA_REBOOT)     { delay(100); ESP.restart(); }
+    if (action == PA_WIFI_RESET) { wifiReset(); }
+    if (action == PA_FORMAT)     { LittleFS.format(); delay(100); ESP.restart(); }
 }
