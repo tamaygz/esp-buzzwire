@@ -294,6 +294,14 @@ static BodyState* ensureBodyState(AsyncWebServerRequest* req) {
     return state;
 }
 
+static void clearBodyState(AsyncWebServerRequest* req) {
+    BodyState* state = reinterpret_cast<BodyState*>(req->_tempObject);
+    if (state != nullptr) {
+        delete state;
+        req->_tempObject = nullptr;
+    }
+}
+
 static BodyState* takeBodyState(AsyncWebServerRequest* req) {
     BodyState* state = reinterpret_cast<BodyState*>(req->_tempObject);
     req->_tempObject = nullptr;
@@ -310,6 +318,7 @@ static void collectBody(AsyncWebServerRequest* req,
     if (state->rejected) return;
     if (total > MAX_BODY_BYTES) {
         state->rejected = true;
+        clearBodyState(req);
         req->send(413, "application/json", "{\"error\":\"payload too large\"}");
         return;
     }
