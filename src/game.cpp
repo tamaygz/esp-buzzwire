@@ -22,8 +22,17 @@ static char winMsg[32]    = {};
 static char lastProLetter = '\0';
 static int  lastElapsedSec = -1;
 
+// `fsReady` is owned by the main application and indicates whether LittleFS
+// was mounted successfully. Use a weak reference so scoreboard persistence
+// cleanly disables itself if that symbol is not present in the build.
+extern bool fsReady __attribute__((weak));
+
 // ── State Change Callback ──────────────────────────────────────────────────
 static void (*sStateChangeCb)(GameState state, unsigned long elapsed, int fails) = nullptr;
+
+static bool isScoreboardPersistenceEnabled() {
+    return (&fsReady != nullptr) && fsReady;
+}
 
 void gameOnStateChange(void (*cb)(GameState state, unsigned long elapsed, int fails)) {
     sStateChangeCb = cb;
@@ -87,7 +96,12 @@ static void enterState(GameState newState) {
                  elapsed / 1000UL, failCount);
         Serial.print(F("[GAME] WIN message: "));
         Serial.println(winMsg);
-        scoreboardAdd(elapsed, failCount);
+
+        if (isScoreboardPersistenceEnabled()) {
+            scoreboardAdd(elapsed, failCount);
+        } else {
+            Serial.println(F("[GAME] Scoreboard persistence disabled; skipping save"));
+        }
     }
 
     if (newState == STATE_FAIL || newState == STATE_WIN || newState == STATE_IDLE) {
