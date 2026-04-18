@@ -29,7 +29,9 @@ static bool isAllowedSoundKey(const char* key) {
     return strcmp(key, "start") == 0 ||
            strcmp(key, "countdown") == 0 ||
            strcmp(key, "fail") == 0 ||
-           strcmp(key, "win") == 0;
+           strcmp(key, "win") == 0 ||
+           strcmp(key, "proGreen") == 0 ||
+           strcmp(key, "proRed") == 0;
 }
 
 static bool validateAndCopySounds(const JsonDocument& src, JsonDocument& dst) {
@@ -148,6 +150,15 @@ void wsBroadcastState()   { sWs.textAll(wrapEvent("state",   buildStateJson()));
 void wsBroadcastConfig()  { sWs.textAll(wrapEvent("config",  buildConfigJson()));  }
 void wsBroadcastScores()  { sWs.textAll(wrapEvent("scores",  buildScoresJson()));  }
 void wsBroadcastSysInfo() { sWs.textAll(wrapEvent("sysinfo", buildSysJson()));     }
+
+void wsBroadcastPhase(bool isGreen, unsigned long durationMs) {
+    String msg = F("{\"phase\":\"");
+    msg += isGreen ? F("GREEN") : F("RED");
+    msg += F("\",\"duration\":");
+    msg += durationMs;
+    msg += '}';
+    sWs.textAll(wrapEvent("phase", msg));
+}
 
 // ── WebSocket handler ─────────────────────────────────────────────────────────
 static void onWsEvent(AsyncWebSocket* server, AsyncWebSocketClient* client,

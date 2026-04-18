@@ -65,7 +65,7 @@ void setup() {
         wsBroadcastState();
         if (state == STATE_WIN) wsBroadcastScores();
     });
-    promodeOnPhaseChange([](bool, unsigned long) { wsBroadcastState(); });
+    promodeOnPhaseChange([](bool isGreen, unsigned long durationMs) { wsBroadcastPhase(isGreen, durationMs); });
 
     if (fsReady) scoreboardInit();
     else Serial.println(F("[SCORES] LittleFS unavailable — persistence disabled"));

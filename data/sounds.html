@@ -34,6 +34,14 @@
         <label>Win sound URL</label>
         <input type="url" id="sndWin" placeholder="https://…/win.mp3">
       </div>
+      <div class="field">
+        <label>Pro Mode — Green phase URL <span class="muted" style="font-size:.8em">(safe, start moving)</span></label>
+        <input type="url" id="sndProGreen" placeholder="https://…/pro-green.mp3">
+      </div>
+      <div class="field">
+        <label>Pro Mode — Red phase URL <span class="muted" style="font-size:.8em">(freeze!)</span></label>
+        <input type="url" id="sndProRed" placeholder="https://…/pro-red.mp3">
+      </div>
     </div>
 
     <div class="gap mt">
@@ -52,6 +60,8 @@ function populate(s) {
   document.getElementById('sndCountdown').value = s.countdown || '';
   document.getElementById('sndFail').value      = s.fail      || '';
   document.getElementById('sndWin').value       = s.win       || '';
+  document.getElementById('sndProGreen').value  = s.proGreen  || '';
+  document.getElementById('sndProRed').value    = s.proRed    || '';
 }
 
 fetch('/api/sounds').then(r => r.json()).then(populate).catch(() => {});
@@ -63,6 +73,8 @@ document.getElementById('soundForm').addEventListener('submit', function(e) {
     countdown: document.getElementById('sndCountdown').value.trim(),
     fail:      document.getElementById('sndFail').value.trim(),
     win:       document.getElementById('sndWin').value.trim(),
+    proGreen:  document.getElementById('sndProGreen').value.trim(),
+    proRed:    document.getElementById('sndProRed').value.trim(),
   };
   fetch('/api/sounds', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) })
     .then(r => r.json())
@@ -80,6 +92,12 @@ function testSound() {
 wsOn('state', function(d) {
   const map = { COUNTDOWN: sounds.countdown, PLAYING: sounds.start, FAIL: sounds.fail, WIN: sounds.win };
   const url = map[d.state];
+  if (url) new Audio(url).play().catch(() => {});
+});
+
+// Play pro mode phase sounds
+wsOn('phase', function(d) {
+  const url = d.phase === 'GREEN' ? sounds.proGreen : sounds.proRed;
   if (url) new Audio(url).play().catch(() => {});
 });
 </script>

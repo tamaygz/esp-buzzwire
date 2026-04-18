@@ -9,9 +9,10 @@ void webServerSetup();
 void webServerLoop();   // Flush queued WebSocket text messages
 
 // ── Push events to all connected WS clients ──────────────────────────────────
-void wsBroadcastState();         // Game state snapshot
-void wsBroadcastConfig();        // Full config JSON
-void wsBroadcastScores();        // Scoreboard JSON
-void wsBroadcastSysInfo();       // Free heap, uptime, RSSI, AP/STA mode
+void wsBroadcastState();                                    // Game state snapshot
+void wsBroadcastConfig();                                   // Full config JSON
+void wsBroadcastScores();                                   // Scoreboard JSON
+void wsBroadcastSysInfo();                                  // Free heap, uptime, RSSI, AP/STA mode
+void wsBroadcastPhase(bool isGreen, unsigned long durationMs); // Pro mode phase change
 
 #endif // WEBSERVER_H

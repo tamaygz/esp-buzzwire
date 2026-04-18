@@ -46,6 +46,13 @@
 </main>
 
 <script>
+let sounds = {};
+fetch('/api/sounds').then(r => r.json()).then(s => { sounds = s; }).catch(() => {});
+
+function playSound(url) {
+  if (url) new Audio(url).play().catch(() => {});
+}
+
 function stateBadgeClass(s) {
   const m = { IDLE:'badge-idle', COUNTDOWN:'badge-countdown', PLAYING:'badge-playing', FAIL:'badge-fail', WIN:'badge-win' };
   return m[s] || 'badge-idle';
@@ -57,6 +64,13 @@ wsOn('state', function(d) {
   b.textContent = d.state;
   document.getElementById('elapsedVal').textContent = (d.elapsed / 1000).toFixed(1) + ' s';
   document.getElementById('failsVal').textContent   = d.fails;
+
+  const soundMap = { COUNTDOWN: sounds.countdown, PLAYING: sounds.start, FAIL: sounds.fail, WIN: sounds.win };
+  playSound(soundMap[d.state]);
+});
+
+wsOn('phase', function(d) {
+  playSound(d.phase === 'GREEN' ? sounds.proGreen : sounds.proRed);
 });
 
 wsOn('scores', function(d) {
