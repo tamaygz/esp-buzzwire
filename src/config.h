@@ -6,7 +6,11 @@
 // ── Debug Logging ────────────────────────────────────────────────────────────
 // Set to 1 to enable verbose sensor/LED/promode debug output on Serial.
 // Leave at 0 for production builds (saves RAM and CPU time).
-#define DEBUG_LOGGING      0
+// Can also be set via PlatformIO build flag: -D DEBUG_LOGGING=1
+// (e.g., use the [env:d1_mini_debug] environment in platformio.ini).
+#ifndef DEBUG_LOGGING
+  #define DEBUG_LOGGING    0
+#endif
 
 #if DEBUG_LOGGING
   #define DEBUG_LOG(msg)            Serial.print(F(msg))

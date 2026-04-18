@@ -13,6 +13,13 @@ static int failCount            = 0;
 static unsigned long elapsed    = 0;
 static int countdownStep        = 3;
 
+// ── Per-State One-Shot Flags ─────────────────────────────────────────────────
+// These are reset in enterState() and set the first time their action fires.
+static bool buzzerFired   = false;   // Ensures FAIL buzzer fires exactly once
+static char winMsg[32]    = {};      // WIN message built once in enterState(STATE_WIN)
+static char lastProLetter = '\0';    // Cached Pro Mode letter (G/R); '\0' = unset
+static int  lastElapsedSec = -1;     // Cached elapsed seconds for normal-mode matrix
+
 // ── State Name Helper ────────────────────────────────────────────────────────
 const char* gameGetStateName(GameState s) {
     switch (s) {
@@ -27,17 +34,20 @@ const char* gameGetStateName(GameState s) {
 
 // ── Setup ───────────────────────────────────────────────────────────────────
 void gameSetup() {
-    currentState = STATE_IDLE;
-    timerStart   = 0;
-    stateStart   = millis();
-    failCount    = 0;
-    elapsed      = 0;
-    countdownStep = 3;
+    currentState   = STATE_IDLE;
+    timerStart     = 0;
+    stateStart     = millis();
+    failCount      = 0;
+    elapsed        = 0;
+    countdownStep  = 3;
+    buzzerFired    = false;
+    lastProLetter  = '\0';
+    lastElapsedSec = -1;
 }
 
 // ── State Transition Helper ──────────────────────────────────────────────────
-// Resets the per-state timer, clears the matrix scroll position, and logs
-// the transition so it is always visible in the Serial monitor.
+// Resets the per-state timer, clears the matrix scroll position, resets
+// one-shot flags, and logs the transition so it is always visible in Serial.
 static void enterState(GameState newState) {
     Serial.print(F("[GAME] "));
     Serial.print(gameGetStateName(currentState));
@@ -47,6 +57,20 @@ static void enterState(GameState newState) {
     currentState = newState;
     stateStart   = millis();
     matrixScrollReset();   // Always start fresh on state entry
+
+    // Reset one-shot / cached state for the new state
+    buzzerFired    = false;
+    lastProLetter  = '\0';
+    lastElapsedSec = -1;
+
+    // Build WIN message at entry so it is ready before the first loop tick.
+    // snprintf() runs exactly once per WIN state, not every loop tick.
+    if (newState == STATE_WIN) {
+        snprintf(winMsg, sizeof(winMsg), "WIN! %lus %df",
+                 elapsed / 1000UL, failCount);
+        Serial.print(F("[GAME] WIN message: "));
+        Serial.println(winMsg);
+    }
 
     // Turn off pro-mode LEDs when leaving PLAYING
     if (newState == STATE_FAIL || newState == STATE_WIN || newState == STATE_IDLE) {
@@ -96,7 +120,10 @@ static void handleCountdown() {
         ledsClear();
 
 #if PRO_MODE_ENABLED
+        // Only calibrate IR when it is actually used (avoids ~64ms delay for PIR-only builds)
+  #if (PRO_MODE_SENSOR == SENSOR_IR) || (PRO_MODE_SENSOR == SENSOR_BOTH)
         irCalibrate();
+  #endif
         promodeReset();
 #endif
 
@@ -141,17 +168,35 @@ static void handlePlaying() {
         return;
     }
 
-    // Matrix: 'G' (green) = player may move; 'R' (red) = freeze
-    if (promodeIsGreen()) {
-        matrixShowLetter('G', CRGB::Green);
-        ledsProGreen();
-    } else {
-        matrixShowLetter('R', CRGB::Red);
-        ledsProRed();
+    // Matrix: only redraw when the phase changes (G ↔ R) to avoid redundant
+    // FastLED.show() calls every loop tick.
+    // LED strip effects are called every tick (self-throttled via PLAY_UPDATE_MS)
+    // so the smooth beatsin8 breathing animation continues uninterrupted.
+    {
+        char newLetter = promodeIsGreen() ? 'G' : 'R';
+        if (newLetter != lastProLetter) {
+            lastProLetter = newLetter;
+            if (newLetter == 'G') {
+                matrixShowLetter('G', CRGB::Green);
+            } else {
+                matrixShowLetter('R', CRGB::Red);
+            }
+        }
+        if (promodeIsGreen()) {
+            ledsProGreen();
+        } else {
+            ledsProRed();
+        }
     }
 #else
-    // Normal mode: live elapsed time on matrix (seconds), slow green pulse
-    matrixShowNumber((int)(elapsed / 1000), CRGB::White);
+    // Normal mode: update matrix only when the displayed second changes
+    {
+        int sec = (int)(elapsed / 1000);
+        if (sec != lastElapsedSec) {
+            lastElapsedSec = sec;
+            matrixShowNumber(sec, CRGB::White);
+        }
+    }
     ledsPlaying();
 #endif
 
@@ -163,9 +208,11 @@ static void handleFail() {
     unsigned long now = millis();
     unsigned long dt  = now - stateStart;
 
-    // Single 500 ms buzzer tone at state entry
-    if (dt < 10) {
+    // Single 500 ms buzzer tone — fired exactly once via buzzerFired flag
+    // (avoids the fragile dt<10 window that could be missed if loop is slow)
+    if (!buzzerFired) {
         digitalWrite(BUZZER_PIN, HIGH);
+        buzzerFired = true;
     } else if (dt >= 500) {
         digitalWrite(BUZZER_PIN, LOW);
     }
@@ -204,10 +251,7 @@ static void handleWin() {
 
     ledsWin();
 
-    // Build message once and keep the static buffer address stable for the scroll
-    static char winMsg[32];
-    snprintf(winMsg, sizeof(winMsg), "WIN! %lus %df",
-             elapsed / 1000UL, failCount);
+    // winMsg was formatted once in enterState(STATE_WIN); just scroll it here.
     matrixScrollText(winMsg, CRGB::Green, SCROLL_WIN_MS);
 
     if (dt >= (unsigned long)WIN_DISPLAY_MS) {
