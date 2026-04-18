@@ -6,6 +6,17 @@ GameConfig cfg;
 
 static const char CONFIG_PATH[] = "/config.json";
 
+static bool configIsValid(const GameConfig& c) {
+    if (c.proModeSensor > SENSOR_BOTH) return false;
+    if (c.proGreenMin == 0 || c.proGreenMax == 0 || c.proGreenMin > c.proGreenMax) return false;
+    if (c.proRedMin == 0 || c.proRedMax == 0 || c.proRedMin > c.proRedMax) return false;
+    if (c.irMoveThreshold > 1023) return false;
+    if (c.failDisplayMs == 0 || c.winDisplayMs == 0 || c.countdownStepMs == 0) return false;
+    if (c.strobeIntervalMs == 0 || c.strobeFlashCount == 0) return false;
+    if (c.scrollIdleMs == 0 || c.scrollCountdownMs == 0 || c.scrollFailMs == 0 || c.scrollWinMs == 0) return false;
+    return true;
+}
+
 // ── Defaults ─────────────────────────────────────────────────────────────────
 void configInit() {
     cfg.proModeEnabled    = PRO_MODE_ENABLED;
@@ -60,6 +71,13 @@ bool configLoad() {
     cfg.scrollCountdownMs = doc["scrollCountdownMs"] | cfg.scrollCountdownMs;
     cfg.scrollFailMs      = doc["scrollFailMs"]      | cfg.scrollFailMs;
     cfg.scrollWinMs       = doc["scrollWinMs"]       | cfg.scrollWinMs;
+
+    if (!configIsValid(cfg)) {
+        Serial.println(F("[CFG] Invalid config on disk, restoring defaults"));
+        configInit();
+        configSave();
+        return false;
+    }
 
     return true;
 }
