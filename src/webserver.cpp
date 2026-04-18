@@ -506,7 +506,9 @@ void webServerLoop() {
     unsigned long now = millis();
     if (now - sLastSysInfoBroadcast >= 3000UL) {
         sLastSysInfoBroadcast = now;
-        wsBroadcastSysInfo();
+        if (sWs.count() > 0) {
+            wsBroadcastSysInfo();
+        }
     }
     // Execute deferred actions here — safe in main loop context, not interrupt context
     noInterrupts();
