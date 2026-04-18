@@ -15,6 +15,8 @@ static AsyncWebSocket  sWs("/ws");
 enum PendingAction { PA_NONE, PA_REBOOT, PA_WIFI_RESET, PA_FORMAT };
 static volatile uint8_t sPendingAction = PA_NONE;
 static unsigned long    sLastSysInfoBroadcast = 0;
+static unsigned long    sLastStateBroadcast = 0;
+static constexpr unsigned long STATE_BROADCAST_PLAYING_MS = 250UL;
 
 static void setPendingAction(PendingAction action) {
     noInterrupts();
@@ -515,6 +517,14 @@ void webServerSetup() {
 void webServerLoop() {
     sWs.cleanupClients();
     unsigned long now = millis();
+    if (sWs.count() > 0 && gameGetState() == STATE_PLAYING) {
+        if (now - sLastStateBroadcast >= STATE_BROADCAST_PLAYING_MS) {
+            sLastStateBroadcast = now;
+            wsBroadcastState();
+        }
+    } else {
+        sLastStateBroadcast = now;
+    }
     if (now - sLastSysInfoBroadcast >= 3000UL) {
         sLastSysInfoBroadcast = now;
         if (sWs.count() > 0) {

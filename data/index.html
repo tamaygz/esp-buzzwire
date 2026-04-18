@@ -29,7 +29,7 @@
 
   <h3>Remote Control</h3>
   <div class="gap">
-    <button class="btn btn-success" onclick="wsSend('start')">&#9654; Start</button>
+    <button class="btn btn-success" onclick="armAudio(); wsSend('start')">&#9654; Start</button>
     <button class="btn btn-ghost"   onclick="wsSend('reset')">&#8635; Reset</button>
     <button class="btn btn-warn btn-sm" onclick="wsSend('simWire')">Sim Wire</button>
     <button class="btn btn-primary btn-sm" onclick="wsSend('simFinish')">Sim Finish</button>
@@ -49,8 +49,37 @@
 let sounds = {};
 fetch('/api/sounds').then(r => r.json()).then(s => { sounds = s; }).catch(() => {});
 
+const SILENT_WAV = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAESsAACJWAAACABAAZGF0YQAAAAA=';
+const sfx = new Audio();
+let audioUnlocked = false;
+let lastState = null;
+
+function armAudio() {
+  if (audioUnlocked) return;
+  sfx.muted = true;
+  sfx.src = SILENT_WAV;
+  sfx.play().then(() => {
+    sfx.pause();
+    sfx.currentTime = 0;
+    sfx.muted = false;
+    sfx.src = '';
+    audioUnlocked = true;
+  }).catch(() => {
+    sfx.muted = false;
+    sfx.src = '';
+  });
+}
+
+document.addEventListener('touchstart', armAudio, { passive: true });
+document.addEventListener('pointerdown', armAudio);
+document.addEventListener('keydown', armAudio);
+
 function playSound(url) {
-  if (url) new Audio(url).play().catch(() => {});
+  if (!url || !audioUnlocked) return;
+  const resolvedUrl = new URL(url, location.href).href;
+  if (sfx.src !== resolvedUrl) sfx.src = resolvedUrl;
+  sfx.currentTime = 0;
+  sfx.play().catch(() => {});
 }
 
 function stateBadgeClass(s) {
@@ -66,7 +95,10 @@ wsOn('state', function(d) {
   document.getElementById('failsVal').textContent   = d.fails;
 
   const soundMap = { COUNTDOWN: sounds.countdown, PLAYING: sounds.start, FAIL: sounds.fail, WIN: sounds.win };
-  playSound(soundMap[d.state]);
+  if (d.state !== lastState) {
+    playSound(soundMap[d.state]);
+    lastState = d.state;
+  }
 });
 
 wsOn('phase', function(d) {
