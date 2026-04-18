@@ -29,7 +29,7 @@ const char*  gameGetStateName(GameState s);
 void gameOnStateChange(void (*cb)(GameState state, unsigned long elapsed, int fails));
 
 // ── Remote Control ───────────────────────────────────────────────────────────
-// Set flags consumed on the next gameLoop() tick. Safe to call from ISR/async context.
+// Request actions to be handled on the next gameLoop() tick.
 void gameRemoteStart();
 void gameRemoteReset();
 void gameRemoteSimWire();
