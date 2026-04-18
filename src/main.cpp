@@ -19,6 +19,8 @@
 #include "game.h"
 #include "promode.h"
 
+bool fsReady = false;
+
 // ── Setup ───────────────────────────────────────────────────────────────────
 void setup() {
     Serial.begin(115200);
@@ -31,7 +33,7 @@ void setup() {
     pinMode(BUZZER_PIN, OUTPUT);
     digitalWrite(BUZZER_PIN, LOW);
 
-    bool fsReady = LittleFS.begin();
+    fsReady = LittleFS.begin();
     if (!fsReady) {
         Serial.println(F("[FS] LittleFS mount failed — web UI unavailable"));
     }
