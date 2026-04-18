@@ -44,10 +44,44 @@ static volatile bool remoteReset         = false;
 static volatile bool remoteSimWire       = false;
 static volatile bool remoteSimFinish     = false;
 
-void gameRemoteStart()       { remoteStart      = true; }
-void gameRemoteReset()       { remoteReset      = true; }
-void gameRemoteSimWire()     { remoteSimWire    = true; }
-void gameRemoteSimFinish()   { remoteSimFinish  = true; }
+static void clearRemoteFlags() {
+    remoteStart     = false;
+    remoteReset     = false;
+    remoteSimWire   = false;
+    remoteSimFinish = false;
+}
+
+void gameRemoteStart() {
+    if (currentState == STATE_IDLE) {
+        remoteStart = true;
+    } else {
+        remoteStart = false;
+    }
+}
+
+void gameRemoteReset() {
+    if (currentState != STATE_IDLE) {
+        remoteReset = true;
+    } else {
+        remoteReset = false;
+    }
+}
+
+void gameRemoteSimWire() {
+    if (currentState == STATE_PLAYING) {
+        remoteSimWire = true;
+    } else {
+        remoteSimWire = false;
+    }
+}
+
+void gameRemoteSimFinish() {
+    if (currentState == STATE_PLAYING) {
+        remoteSimFinish = true;
+    } else {
+        remoteSimFinish = false;
+    }
+}
 
 // ── State Name Helper ────────────────────────────────────────────────────────
 const char* gameGetStateName(GameState s) {
@@ -72,6 +106,7 @@ void gameSetup() {
     buzzerFired    = false;
     lastProLetter  = '\0';
     lastElapsedSec = -1;
+    clearRemoteFlags();
 }
 
 // ── State Transition Helper ──────────────────────────────────────────────────
