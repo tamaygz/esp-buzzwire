@@ -46,46 +46,71 @@
 </main>
 
 <script>
-let sounds = {};
-fetch('/api/sounds').then(r => r.json()).then(s => { sounds = s; }).catch(() => {});
+// ── Sound pool ─────────────────────────────────────────────────────────────
+// One Audio element per slot with a fixed src.
+// iOS blocks .play() after src changes on the same element, so we never
+// reassign src once a URL is loaded.  Each element is "primed" (muted
+// play+pause) inside a user-gesture handler so iOS marks it as activated,
+// after which subsequent .play() calls succeed without a new gesture.
+const SOUND_SLOTS = ['start', 'countdown', 'fail', 'win', 'proGreen', 'proRed'];
+const sfxPool = {};
+SOUND_SLOTS.forEach(slot => { sfxPool[slot] = new Audio(); });
 
-const SILENT_WAV = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAESsAACJWAAACABAAZGF0YQAAAAA=';
-const sfx = new Audio();
-let audioUnlocked = false;
+let sounds = {};
+let audioArmed = false;
+// lastState persists across WS reconnects; null means "no state seen yet"
+// – prevents the initial WS snapshot from triggering a sound.
 let lastState = null;
 
-function armAudio() {
-  if (audioUnlocked) return;
-  sfx.muted = true;
-  sfx.src = SILENT_WAV;
-  sfx.play().then(() => {
-    sfx.pause();
-    sfx.currentTime = 0;
-    sfx.muted = false;
-    sfx.src = '';
-    audioUnlocked = true;
-  }).catch(() => {
-    sfx.muted = false;
-    sfx.src = '';
+function loadSoundsIntoPool(s) {
+  sounds = s;
+  SOUND_SLOTS.forEach(slot => {
+    const url = (s[slot] || '').trim();
+    if (!url) return;
+    const el = sfxPool[slot];
+    const abs = new URL(url, location.href).href;
+    if (el.src !== abs) { el.src = url; el.load(); }
+    if (audioArmed) primeSlot(el);
   });
 }
+
+function primeSlot(el) {
+  if (!el.src || el.src === location.href) return;
+  const prev = el.muted;
+  el.muted = true;
+  el.play().then(() => {
+    el.pause();
+    el.currentTime = 0;
+    el.muted = prev;
+  }).catch(() => { el.muted = prev; });
+}
+
+function armAudio() {
+  if (audioArmed) return;
+  audioArmed = true;
+  SOUND_SLOTS.forEach(slot => primeSlot(sfxPool[slot]));
+}
+
+function playSlot(slot) {
+  if (!audioArmed) return;
+  const el = sfxPool[slot];
+  if (!el || !el.src || el.src === location.href) return;
+  el.currentTime = 0;
+  el.play().catch(() => {});
+}
+
+fetch('/api/sounds').then(r => r.json()).then(loadSoundsIntoPool).catch(() => {});
 
 document.addEventListener('touchstart', armAudio, { passive: true });
 document.addEventListener('pointerdown', armAudio);
 document.addEventListener('keydown', armAudio);
 
-function playSound(url) {
-  if (!url || !audioUnlocked) return;
-  const resolvedUrl = new URL(url, location.href).href;
-  if (sfx.src !== resolvedUrl) sfx.src = resolvedUrl;
-  sfx.currentTime = 0;
-  sfx.play().catch(() => {});
-}
-
 function stateBadgeClass(s) {
   const m = { IDLE:'badge-idle', COUNTDOWN:'badge-countdown', PLAYING:'badge-playing', FAIL:'badge-fail', WIN:'badge-win' };
   return m[s] || 'badge-idle';
 }
+
+const STATE_SOUND = { COUNTDOWN: 'countdown', PLAYING: 'start', FAIL: 'fail', WIN: 'win' };
 
 wsOn('state', function(d) {
   const b = document.getElementById('stateBadge');
@@ -94,15 +119,17 @@ wsOn('state', function(d) {
   document.getElementById('elapsedVal').textContent = (d.elapsed / 1000).toFixed(1) + ' s';
   document.getElementById('failsVal').textContent   = d.fails;
 
-  const soundMap = { COUNTDOWN: sounds.countdown, PLAYING: sounds.start, FAIL: sounds.fail, WIN: sounds.win };
-  if (d.state !== lastState) {
-    playSound(soundMap[d.state]);
-    lastState = d.state;
+  // lastState === null means this is the first snapshot from the WS connection
+  // (we may have joined mid-game), so skip playing a sound for it.
+  if (lastState !== null && d.state !== lastState) {
+    const slot = STATE_SOUND[d.state];
+    if (slot) playSlot(slot);
   }
+  lastState = d.state;
 });
 
 wsOn('phase', function(d) {
-  playSound(d.phase === 'GREEN' ? sounds.proGreen : sounds.proRed);
+  playSlot(d.phase === 'GREEN' ? 'proGreen' : 'proRed');
 });
 
 wsOn('scores', function(d) {
