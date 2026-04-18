@@ -23,6 +23,38 @@ static void setPendingAction(PendingAction action) {
 }
 
 // ── JSON Builders ─────────────────────────────────────────────────────────────
+static constexpr size_t kMaxSoundValueLength = 256;
+
+static bool isAllowedSoundKey(const char* key) {
+    return strcmp(key, "start") == 0 ||
+           strcmp(key, "countdown") == 0 ||
+           strcmp(key, "fail") == 0 ||
+           strcmp(key, "win") == 0;
+}
+
+static bool validateAndCopySounds(const JsonDocument& src, JsonDocument& dst) {
+    if (!src.is<JsonObjectConst>()) {
+        return false;
+    }
+
+    JsonObjectConst obj = src.as<JsonObjectConst>();
+    for (JsonPairConst kv : obj) {
+        const char* key = kv.key().c_str();
+        if (!isAllowedSoundKey(key) || !kv.value().is<const char*>()) {
+            return false;
+        }
+
+        const char* value = kv.value().as<const char*>();
+        if (value == nullptr || strlen(value) > kMaxSoundValueLength) {
+            return false;
+        }
+
+        dst[key] = value;
+    }
+
+    return true;
+}
+
 static String buildStateJson() {
     JsonDocument doc;
     GameState gs = gameGetState();
@@ -417,9 +449,16 @@ void webServerSetup() {
                 return;
             }
             delete bodyState;
+
+            JsonDocument sanitizedDoc;
+            if (!validateAndCopySounds(doc, sanitizedDoc)) {
+                sendJson(req, 400, "{\"error\":\"invalid sounds payload\"}");
+                return;
+            }
+
             File f = LittleFS.open("/sounds.json", "w");
             if (!f) { sendJson(req, 500, "{\"error\":\"fs write failed\"}"); return; }
-            serializeJson(doc, f);
+            serializeJson(sanitizedDoc, f);
             f.close();
             sendJson(req, 200, buildSoundsJson());
         },
