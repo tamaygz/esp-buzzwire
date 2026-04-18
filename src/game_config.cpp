@@ -5,12 +5,15 @@
 GameConfig cfg;
 
 static const char CONFIG_PATH[] = "/config.json";
+static constexpr uint16_t IR_THRESHOLD_MAX = 1023;
 
 static bool configIsValid(const GameConfig& c) {
-    if (c.proModeSensor > SENSOR_BOTH) return false;
+    if (c.proModeSensor != SENSOR_IR &&
+        c.proModeSensor != SENSOR_PIR &&
+        c.proModeSensor != SENSOR_BOTH) return false;
     if (c.proGreenMin == 0 || c.proGreenMax == 0 || c.proGreenMin > c.proGreenMax) return false;
     if (c.proRedMin == 0 || c.proRedMax == 0 || c.proRedMin > c.proRedMax) return false;
-    if (c.irMoveThreshold > 1023) return false;
+    if (c.irMoveThreshold > IR_THRESHOLD_MAX) return false;
     if (c.failDisplayMs == 0 || c.winDisplayMs == 0 || c.countdownStepMs == 0) return false;
     if (c.strobeIntervalMs == 0 || c.strobeFlashCount == 0) return false;
     if (c.scrollIdleMs == 0 || c.scrollCountdownMs == 0 || c.scrollFailMs == 0 || c.scrollWinMs == 0) return false;
