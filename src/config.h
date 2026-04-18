@@ -58,10 +58,10 @@
 
 #define PRO_MODE_SENSOR    SENSOR_IR   // 0=IR, 1=PIR, 2=BOTH
 
-#define PRO_GREEN_MIN      2000     // ms min green phase
-#define PRO_GREEN_MAX      10000     // ms max green phase
-#define PRO_RED_MIN        1500     // ms min red phase
-#define PRO_RED_MAX        4000     // ms max red phase
+#define PRO_GREEN_MIN      3000     // ms min green phase
+#define PRO_GREEN_MAX      20000     // ms max green phase
+#define PRO_RED_MIN        2000     // ms min red phase
+#define PRO_RED_MAX        5000     // ms max red phase
 
 #define IR_PIN             A0       // Only analog pin on ESP8266
 #define IR_MOVE_THRESHOLD  150      // ADC delta to register as movement
