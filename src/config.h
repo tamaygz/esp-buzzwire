@@ -5,6 +5,9 @@
 
 // ── Firmware Version ─────────────────────────────────────────────────────────
 #define FW_VERSION  "1.1.0"
+#define FW_VERSION_TEXT       FW_VERSION
+#define FW_VERSION_PRINT()    Serial.print(F(FW_VERSION))
+#define FW_VERSION_PRINTLN()  Serial.println(F(FW_VERSION))
 
 // ── Debug Logging ────────────────────────────────────────────────────────────
 // Set to 1 to enable verbose sensor/LED/promode debug output on Serial.
